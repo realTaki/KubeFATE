@@ -4,36 +4,39 @@ go 1.13
 
 require (
 	github.com/DataDog/zstd v1.4.4 // indirect
-	github.com/Masterminds/sprig/v3 v3.0.2
+	github.com/Masterminds/sprig/v3 v3.2.2
 	github.com/appleboy/gin-jwt/v2 v2.6.3
+	github.com/bugsnag/bugsnag-go v1.5.0 // indirect
+	github.com/bugsnag/panicwrap v1.2.0 // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
+	github.com/docker/libtrust v0.0.0-20160708172513-aabc10ec26b7 // indirect
+	github.com/emicklei/go-restful v2.11.1+incompatible // indirect
 	github.com/gin-contrib/logger v0.0.2
 	github.com/gin-gonic/gin v1.5.0
 	github.com/go-playground/universal-translator v0.17.0 // indirect
-	github.com/gofrs/flock v0.7.1
-	github.com/golang/protobuf v1.3.3 // indirect
-	github.com/golang/snappy v0.0.1 // indirect
-	github.com/gosuri/uitable v0.0.1
-	github.com/json-iterator/go v1.1.9
+	github.com/gofrs/flock v0.8.1
+	github.com/gosuri/uitable v0.0.4
+	github.com/gregjones/httpcache v0.0.0-20181110185634-c63ab54fda8f // indirect
+	github.com/json-iterator/go v1.1.12
+	github.com/kardianos/osext v0.0.0-20170510131534-ae77be60afb1 // indirect
 	github.com/leodido/go-urn v1.2.0 // indirect
-	github.com/mattn/go-isatty v0.0.12 // indirect
-	github.com/pkg/errors v0.8.1
+	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.17.2
 	github.com/satori/go.uuid v1.2.0
-	github.com/spf13/viper v1.3.2
+	github.com/spf13/viper v1.8.1
 	github.com/urfave/cli/v2 v2.1.1
 	github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c // indirect
 	github.com/xdg/stringprep v1.0.0 // indirect
+	github.com/yvasiyarov/go-metrics v0.0.0-20150112132944-c25f46c4b940 // indirect
+	github.com/yvasiyarov/gorelic v0.0.6 // indirect
 	go.mongodb.org/mongo-driver v1.2.0
-	golang.org/x/crypto v0.0.0-20191028145041-f83a4685e152
-	golang.org/x/sys v0.0.0-20200202164722-d101bd2416d5 // indirect
+	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e
 	gopkg.in/go-playground/validator.v9 v9.31.0 // indirect
-	gopkg.in/yaml.v2 v2.2.8 // indirect
-	helm.sh/helm/v3 v3.0.2
-	k8s.io/api v0.0.0-20191016110408-35e52d86657a
-	k8s.io/apimachinery v0.0.0-20191004115801-a2eda9f80ab8
-	k8s.io/client-go v0.0.0-20191016111102-bec269661e48
-	sigs.k8s.io/yaml v1.1.0
+	helm.sh/helm/v3 v3.10.3
+	k8s.io/api v0.25.2
+	k8s.io/apimachinery v0.25.2
+	k8s.io/client-go v0.25.2
+	sigs.k8s.io/yaml v1.3.0
 )
 
 replace (
