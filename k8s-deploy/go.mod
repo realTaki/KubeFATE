@@ -20,15 +20,16 @@ require (
 	github.com/pkg/errors v0.8.1
 	github.com/rs/zerolog v1.17.2
 	github.com/satori/go.uuid v1.2.0
+	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/viper v1.3.2
 	github.com/urfave/cli/v2 v2.1.1
 	github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c // indirect
 	github.com/xdg/stringprep v1.0.0 // indirect
 	go.mongodb.org/mongo-driver v1.2.0
 	golang.org/x/crypto v0.0.0-20191028145041-f83a4685e152
-	golang.org/x/sys v0.0.0-20200202164722-d101bd2416d5 // indirect
 	gopkg.in/go-playground/validator.v9 v9.31.0 // indirect
 	gopkg.in/yaml.v2 v2.2.8 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 	helm.sh/helm/v3 v3.0.2
 	k8s.io/api v0.0.0-20191016110408-35e52d86657a
 	k8s.io/apimachinery v0.0.0-20191004115801-a2eda9f80ab8
