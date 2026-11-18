@@ -1,0 +1,75 @@
+name: fate-9999
+namespace: fate-9999
+chartName: fate
+chartVersion: v2.0.0
+partyId: 9999
+registry: ""
+pullPolicy:
+imagePullSecrets:
+- name: myregistrykey
+persistence: false
+istio:
+  enabled: false
+podSecurityPolicy:
+  enabled: false
+ingressClassName: nginx
+modules:
+  - python
+  - mysql
+  - fateboard
+  - client
+  - spark
+  - hdfs
+  - nginx
+  - rabbitmq
+
+computing: Spark
+federation: RabbitMQ
+storage: HDFS
+algorithm: Basic
+device: CPU
+
+ingress:
+  fateboard: 
+    hosts:
+    - name: party9999.fateboard.example.com
+  client:  
+    hosts:
+    - name: party9999.notebook.example.com
+  spark:  
+    hosts:
+    - name: party9999.spark.example.com
+  rabbitmq:  
+    hosts:
+    - name: party9999.rabbitmq.example.com
+    
+python:
+  type: NodePort
+  httpNodePort: 30097
+  grpcNodePort: 30092
+  logLevel: INFO
+
+servingIp: 192.168.9.1
+servingPort: 30095
+
+nginx:
+  type: NodePort
+  httpNodePort: 30093
+  grpcNodePort: 30098
+  route_table: 
+    10000: 
+      fateflow: 
+        - host: 192.168.10.1
+          http_port: 30103
+          grpc_port: 30108 
+rabbitmq:
+  type: NodePort
+  nodePort: 30094
+  route_table:
+    9999:
+      host: rabbitmq
+      port: 5672
+    10000:
+      host: 192.168.10.1
+      port: 30104
+      

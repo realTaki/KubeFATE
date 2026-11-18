@@ -1,6 +1,14 @@
-*.conf
 *.cfg
 *.idea/
+*.vscode/
 *bin/
 *.todo
 *.exe
+dist/
+*.egg-info
+*.test
+.DS_Store
+*.out
+*.tgz
+*.tar
+release/

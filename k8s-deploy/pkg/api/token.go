@@ -1,9 +1,25 @@
+/*
+ * Copyright 2019-2021 VMware, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
 package api
 
 import (
-	"github.com/FederatedAI/KubeFATE/k8s-deploy/pkg/db"
-	"k8s.io/apimachinery/pkg/util/rand"
 	"time"
+
+	"github.com/FederatedAI/KubeFATE/k8s-deploy/pkg/modules"
+	"k8s.io/apimachinery/pkg/util/rand"
 
 	jwt "github.com/appleboy/gin-jwt/v2"
 	"github.com/gin-gonic/gin"
@@ -38,7 +54,7 @@ func initAuthmiddleware() error {
 		IdentityKey: identityKey,
 		// Use username as identity key and set it as jwt token
 		PayloadFunc: func(data interface{}) jwt.MapClaims {
-			if v, ok := data.(*db.User); ok {
+			if v, ok := data.(*modules.User); ok {
 				return jwt.MapClaims{
 					identityKey: v.Username,
 				}
@@ -56,13 +72,13 @@ func initAuthmiddleware() error {
 
 		// Check if user exists
 		Authenticator: func(c *gin.Context) (interface{}, error) {
-			loginVals := new(db.User)
-			if err := c.ShouldBindJSON(loginVals); err != nil {
+			loginValues := new(modules.User)
+			if err := c.ShouldBindJSON(loginValues); err != nil {
 				return "", jwt.ErrMissingLoginValues
 			}
-			log.Debug().Msg("Login user name: " + loginVals.Username)
-			if loginVals.IsValid() {
-				return loginVals, nil
+			log.Debug().Msg("Login user name: " + loginValues.Username)
+			if loginValues.IsValid() {
+				return loginValues, nil
 			}
 
 			return nil, jwt.ErrFailedAuthentication

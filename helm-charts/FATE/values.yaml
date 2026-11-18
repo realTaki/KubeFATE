@@ -1,0 +1,401 @@
+
+image:
+  registry: 
+  isThridParty:
+  tag: 2.0.0-release
+  pullPolicy: IfNotPresent
+  imagePullSecrets: 
+#  - name: 
+  
+partyId: 9999
+partyName: fate-9999
+
+# Computing : Eggroll, Spark, Spark_local
+computing: Eggroll
+# Federation: OSX(computing: Eggroll), Pulsar/RabbitMQ(computing: Spark/Spark_local)
+federation: OSX
+# Storage: Eggroll(computing: Eggroll), HDFS(computing: Spark), LocalFS(computing: Spark_local)
+storage: Eggroll
+# Algorithm: Basic, NN, ALL
+algorithm: Basic
+# Device: CPU, IPCL, GPU
+device: IPCL
+
+istio:
+  enabled: false
+
+podSecurityPolicy:
+  enabled: false
+
+ingressClassName: nginx
+
+ingress:
+  fateboard:
+    # annotations:
+    hosts:
+    - name: fateboard.example.com
+      path: /
+    tls: []
+    # - secretName: my-tls-secret
+      # hosts:
+        # - fateboard.example.com
+  client:
+    # annotations:
+    hosts:
+    - name: notebook.example.com
+      path: /
+    tls: [] 
+  spark:
+    # annotations:
+    hosts:
+    - name: spark.example.com
+      path: /
+    tls: [] 
+  rabbitmq:
+    # annotations:
+    hosts:
+    - name: rabbitmq.example.com
+      path: /
+    tls: [] 
+  pulsar:
+    # annotations: 
+    hosts:
+    - name:  pulsar.example.com
+      path: /
+    tls: []
+    
+exchange:
+  partyIp: 192.168.1.1
+  partyPort: 30001
+
+exchangeList:
+- id: 9991
+  ip: 192.168.1.1
+  port: 30910
+
+partyList:
+- partyId: 8888
+  partyIp: 192.168.8.1
+  partyPort: 30081
+- partyId: 10000
+  partyIp: 192.168.10.1
+  partyPort: 30101
+
+persistence:
+  enabled: false
+
+modules:
+  osx: 
+    include: true
+    ip: osx
+    image: "federatedai/osx"
+    imageTag: "2.0.0-release"
+    type: ClusterIP
+    nodePort: 30091
+    loadBalancerIP:
+    enableTLS: false
+    nodeSelector:
+    tolerations:
+    affinity:
+    polling:
+      enabled: false
+      
+      # type: client
+      # server:
+        # ip: 192.168.9.1
+        # port: 9370
+      
+      # type: server
+      # clientList:
+      # - partID: 9999
+      # concurrency: 50
+      
+  lbrollsite:
+    include: true
+    ip: rollsite
+    image: "federatedai/eggroll"
+    imageTag: "2.0.0-release"
+    type: ClusterIP
+    nodePort: 30091
+    loadBalancerIP: 
+    size: "2M"
+    nodeSelector:
+    tolerations:
+    affinity:
+  python: 
+    include: true
+    replicas: 1
+    image: "federatedai/fateflow"
+    imageTag: "2.0.0-release"
+    type: ClusterIP
+    httpNodePort: 30097
+    grpcNodePort: 30092
+    loadBalancerIP: 
+    serviceAccountName: 
+    nodeSelector:
+    tolerations:
+    affinity:
+    failedTaskAutoRetryTimes:
+    failedTaskAutoRetryDelay:
+    logLevel: INFO
+    # subPath: ""
+    existingClaim:
+    dependent_distribution: false
+    claimName: python-data
+    storageClass:
+    accessMode: ReadWriteOnce
+    size: 1Gi
+    clustermanager:
+      cores_per_node: 16
+      nodes: 2
+    spark: 
+      cores_per_node: 20
+      nodes: 2
+      master: spark://spark-master:7077
+      driverHost: fateflow
+      driverHostType: 
+      portMaxRetries: 
+      driverStartPort: 
+      blockManagerStartPort: 
+      pysparkPython: 
+    hdfs:
+      name_node: hdfs://namenode:9000
+      path_prefix:
+    rabbitmq:
+      host: rabbitmq
+      mng_port: 15672
+      port: 5672
+      user: fate
+      password: fate
+    pulsar:
+      host: pulsar
+      port: 6650
+      mng_port: 8080      
+      topic_ttl: 3
+      cluster: standalone
+      tenant: fl-tenant      
+    nginx:
+      host: nginx
+      http_port: 9300
+      grpc_port: 9310
+    hive:
+      host:
+      port:
+      auth_mechanism:
+      username:
+      password:
+  client:
+    include: true
+    ip: client
+    image: "federatedai/client"
+    imageTag: "2.0.0-release"
+    type: ClusterIP
+    nodeSelector:
+    tolerations:
+    affinity:
+    subPath: "client"
+    existingClaim:
+    storageClass:
+    accessMode: ReadWriteOnce
+    size: 1Gi
+    notebook_hashed_password: 
+  clustermanager: 
+    include: true
+    ip: clustermanager
+    image: "federatedai/eggroll"
+    imageTag: "2.0.0-release"
+    type: ClusterIP
+    nodeSelector:
+    tolerations:
+    affinity:
+    mysqlServerTimezone: UTC
+  nodemanager:  
+    include: true
+    replicas: 2
+    image: "federatedai/eggroll"
+    imageTag: "2.0.0-release"
+    nodeSelector:
+    tolerations:
+    affinity:
+    sessionProcessorsPerNode: 4
+    subPath: "nodemanager"
+    storageClass:
+    accessMode: ReadWriteOnce
+    size: 1Gi
+    existingClaim:
+    resources:
+      requests:
+        cpu: "4"
+        memory: "4Gi"
+
+  mysql: 
+    include: true
+    type: ClusterIP
+    image: "mysql"
+    imageTag: "8.0.28"
+    nodeSelector:
+    tolerations:
+    affinity:
+    ip: mysql
+    port: 3306
+    database: eggroll_meta
+    user: fate
+    password: fate_dev
+    subPath: "mysql"
+    existingClaim:
+    claimName: mysql-data
+    storageClass:
+    accessMode: ReadWriteOnce
+    size: 1Gi
+
+  serving:
+    ip: 192.168.9.1
+    port: 30095
+    useRegistry: false
+    zookeeper:
+      hosts:
+        - serving-zookeeper.fate-serving-9999:2181
+    use_acl: false
+    user: fate
+    password: fate
+
+  fateboard:
+    include: true
+    type: ClusterIP
+    image: "federatedai/fateboard"
+    imageTag: "2.0.0-release"
+    username: admin
+    password: admin
+    nodeSelector:
+    tolerations:
+    affinity:
+
+  spark:
+    include: true
+    master:
+      image: "federatedai/spark-master"
+      imageTag: "2.0.0-release"
+      replicas: 1
+      nodeSelector:
+      tolerations:
+      affinity:
+      type: ClusterIP
+      nodePort: 30977
+    worker:
+      image: "federatedai/spark-worker"
+      imageTag: "2.0.0-release"
+      replicas: 2
+      nodeSelector:
+      tolerations:
+      affinity:
+      type: ClusterIP
+      resources:
+        requests:
+          cpu: "4"
+          memory: "8Gi"
+  hdfs:
+    include: true
+    namenode:
+      image: "federatedai/hadoop-namenode"
+      imageTag: "2.0.0-hadoop3.2.1-java8"
+      nodeSelector:
+      tolerations:
+      affinity:
+      type: ClusterIP
+      nodePort: 30900
+      existingClaim:
+      storageClass:
+      accessMode: ReadWriteOnce
+      size: 1Gi
+    datanode:
+      image: "federatedai/hadoop-datanode"
+      imageTag: "2.0.0-hadoop3.2.1-java8"
+      replicas: 3
+      nodeSelector:
+      tolerations:
+      affinity:
+      type: ClusterIP
+      existingClaim:
+      storageClass:
+      accessMode: ReadWriteOnce
+      size: 1Gi
+  nginx:
+    include: true
+    image: "federatedai/nginx"
+    imageTag: "2.0.0-release"
+    nodeSelector:
+    tolerations:
+    affinity:
+    type: ClusterIP
+    httpNodePort: 30093
+    grpcNodePort: 30098
+    loadBalancerIP: 
+    exchange:
+      ip: nginx
+      httpPort: 9300
+      grpcPort: 9310
+    route_table: 
+#      10000: 
+#        proxy: 
+#        - host: 192.168.10.1 
+#          http_port: 30103
+#          grpc_port: 30108
+#        fateflow:
+#        - host: 192.168.10.1  
+#          http_port: 30107
+#          grpc_port: 30102
+  rabbitmq:
+    include: true
+    image: "federatedai/rabbitmq"
+    imageTag: "3.8.3-management"
+    nodeSelector:
+    tolerations:
+    affinity:
+    type: ClusterIP
+    nodePort: 30094
+    loadBalancerIP: 
+    default_user: fate
+    default_pass: fate
+    user: fate
+    password: fate
+    route_table: 
+#      10000:
+#        host: 192.168.10.1 
+#        port: 30104
+
+  pulsar:
+    include: true
+    image: "federatedai/pulsar"
+    imageTag: "2.10.2"
+    nodeSelector:
+    tolerations:
+    env:
+    confs:
+    affinity:
+    type: ClusterIP
+    httpNodePort: 30094
+    httpsNodePort: 30099
+    loadBalancerIP:
+    existingClaim:
+    accessMode: ReadWriteOnce
+    storageClass:
+    size: 1Gi
+    publicLB:
+      enabled: false
+    # exchange:
+      # ip: 192.168.10.1
+      # port: 30000
+      # domain: fate.org
+    route_table: 
+#      10000:
+#        host: 192.168.10.1
+#        port: 30104
+#        sslPort: 30109
+#        proxy: ""
+#   
+
+# externalMysqlIp: mysql
+# externalMysqlPort: 3306
+# externalMysqlDatabase: eggroll_meta
+# externalMysqlUser: fate
+# externalMysqlPassword: fate_dev

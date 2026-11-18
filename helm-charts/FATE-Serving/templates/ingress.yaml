@@ -1,0 +1,84 @@
+# Copyright 2019-2022 VMware, Inc.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+{{ if .Values.servingProxy.include }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: serving-proxy
+  labels:
+    fateMoudle: serving-proxy
+    name: {{ .Values.partyName | quote  }}
+    partyId: {{ .Values.partyId | quote  }}
+    owner: kubefate
+    cluster: fate
+{{- if .Values.ingress.servingProxy.annotations }}
+  annotations:
+{{ toYaml .Values.ingress.servingProxy.annotations | indent 4 }}
+{{- end }}
+spec:
+  ingressClassName: {{ .Values.ingressClassName }}
+  rules:
+  {{- range .Values.ingress.servingProxy.hosts }}
+  - host: {{ .name }}
+    http:
+      paths:
+      - path: {{ default "/" .path }}
+        pathType: Prefix
+        backend:
+          service:
+            name: serving-proxy
+            port: 
+              number: 8059
+  {{- end }}
+{{- if .Values.ingress.servingProxy.tls }}
+  tls:
+{{ toYaml .Values.ingress.servingProxy.tls | indent 4 }}
+{{- end }}
+---
+{{ end }}
+
+{{ if .Values.servingAdmin.include }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: serving-admin
+  labels:
+    fateMoudle: serving-admin
+    name: {{ .Values.partyName | quote  }}
+    partyId: {{ .Values.partyId | quote  }}
+    owner: kubefate
+    cluster: fate
+{{- if .Values.ingress.servingAdmin.annotations }}
+  annotations:
+{{ toYaml .Values.ingress.servingAdmin.annotations | indent 4 }}
+{{- end }}
+spec:
+  ingressClassName: {{ .Values.ingressClassName }}
+  rules:
+  {{- range .Values.ingress.servingAdmin.hosts }}
+  - host: {{ .name }}
+    http:
+      paths:
+      - path: {{ default "/" .path }}
+        pathType: Prefix
+        backend:
+          service:
+            name: serving-admin
+            port: 
+              number: 8350
+  {{- end }}
+{{- if .Values.ingress.servingAdmin.tls }}
+  tls:
+{{ toYaml .Values.ingress.servingAdmin.tls | indent 4 }}
+{{- end }}
+---
+{{ end }}

@@ -1,0 +1,82 @@
+name: fate-10000
+namespace: fate-10000
+chartName: fate
+chartVersion: v2.0.0
+partyId: 10000
+registry: ""
+pullPolicy:
+imagePullSecrets: 
+- name: myregistrykey
+persistence: false
+istio:
+  enabled: false
+ingressClassName: nginx
+podSecurityPolicy:
+  enabled: false
+modules:
+  - python
+  - mysql
+  - fateboard
+  - client
+  - spark
+  - hdfs
+  - nginx
+  - pulsar
+
+computing: Spark
+federation: Pulsar
+storage: HDFS
+algorithm: Basic
+device: CPU
+
+ingress:
+  fateboard: 
+    hosts:
+    - name: party10000.fateboard.example.com
+  client:  
+    hosts:
+    - name: party10000.notebook.example.com
+  spark:  
+    hosts:
+    - name: party10000.spark.example.com
+  pulsar:  
+    hosts:
+    - name: party10000.pulsar.example.com
+
+python:
+  type: NodePort
+  httpNodePort: 30107
+  grpcNodePort: 30102
+  logLevel: INFO
+
+servingIp: 192.168.10.1
+servingPort: 30105
+
+nginx:
+  type: NodePort
+  httpNodePort: 30103
+  grpcNodePort: 30108 
+  route_table: 
+    9999: 
+      fateflow: 
+        - host: 192.168.9.1
+          http_port: 30093
+          grpc_port: 30098
+
+pulsar:
+  type: NodePort
+  httpNodePort: 30104
+  httpsNodePort: 30109
+  publicLB:
+    enabled: false
+  route_table:
+    9999:
+      host: 192.168.9.1
+      port: 30094
+      sslPort: 30099
+      proxy: ""
+    10000:
+      host: pulsar
+      port: 6650
+      sslPort: 6651
+      

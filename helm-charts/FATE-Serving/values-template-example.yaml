@@ -1,0 +1,110 @@
+name: fate-serving-10000
+namespace: fate-serving-10000
+chartName: fate-serving
+chartVersion: v2.1.6
+partyId: 10000
+registry: ""
+pullPolicy:
+imagePullSecrets: 
+- name: myregistrykey
+persistence: false
+istio:
+  enabled: false
+podSecurityPolicy:
+  enabled: false
+ingressClassName: nginx
+modules:
+  - servingProxy
+  - servingRedis
+  - servingServer
+  - servingZookeeper
+  - servingAdmin
+
+ingress:
+  servingProxy: 
+    # annotations: 
+    hosts:
+    - name: serving-proxy.example.com
+      path: /
+  # tls:
+    # - secretName: my-tls-secret
+      # hosts:
+        # - serving-proxy.example.com
+  servingAdmin: 
+    # annotations: 
+    hosts:
+    - name: serving-admin.example.com
+      path: /
+  # tls:
+    # - secretName: my-tls-secret
+      # hosts:
+         # - serving-admin.example.com
+
+# servingAdmin:
+  # nodeSelector:
+  # tolerations:
+  # affinity:
+  # username: admin
+  # password: admin
+
+# servingProxy: 
+  # nodePort: 30310
+  # type: NodePort
+  # loadBalancerIP: 
+  # nodeSelector:
+  # tolerations:
+  # affinity:
+  # partyList:
+  # # - partyId: 9999
+    # # partyIp: 192.168.9.1
+    # # partyPort: 30309
+  # exchange:
+    # ip: 192.168.1.1
+    # port: 30100
+
+# servingServer:
+  # type: NodePort
+  # nodePort: 30210
+  # loadBalancerIP: 
+  # nodeSelector:
+  # tolerations:
+  # affinity:
+  # fateflow:
+    # ip: 192.168.10.1
+    # port: 30110
+  # cacheSwitch: true
+  # cacheType: "redis"
+  # singleAdaptor: com.webank.ai.fate.serving.adaptor.dataaccess.MockAdapter
+  # batchAdaptor: com.webank.ai.fate.serving.adaptor.dataaccess.MockBatchAdapter
+  # AdapterURL: http://127.0.0.1:9380/v1/http/adapter/getFeature
+  # subPath: ""
+  # existingClaim: ""
+  # storageClass: "serving-server"
+  # accessMode: ReadWriteOnce
+  # size: 1Gi
+
+# servingRedis:
+  # password: fate_dev
+  # nodeSelector:
+  # tolerations:
+  # affinity:
+  # subPath: ""
+  # existingClaim: ""
+  # storageClass: "serving-redis"
+  # accessMode: ReadWriteOnce
+  # size: 1Gi
+
+# externalRedisIp: ""
+# externalRedisPort: ""
+# externalRedisPassword: ""
+
+
+# servingZookeeper:
+  # nodeSelector:
+  # tolerations:
+  # affinity:
+  # subPath: ""
+  # existingClaim: ""
+  # storageClass: "serving-zookeeper"
+  # accessMode: ReadWriteOnce
+  # size: 1Gi

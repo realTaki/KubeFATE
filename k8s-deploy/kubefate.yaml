@@ -17,94 +17,195 @@ spec:
       labels:
         fate: kubefate
     spec:
-      serviceAccount: kubefate-admin
+      serviceAccountName: kubefate-admin
       containers:
-        - image: federatedai/kubefate:v1.0.3
+        - image: federatedai/kubefate:v1.4.5
           imagePullPolicy: IfNotPresent
           name: kubefate
           env:
-            - name: FATECLOUD_MONGO_URL
-              value: "mongo:27017"
-            - name: FATECLOUD_MONGO_USERNAME
-              value: "root"
-            - name: FATECLOUD_MONGO_PASSWORD
-              value: "root"
-            - name: FATECLOUD_MONGO_DATABASE
-              value: "KubeFate"
+            - name: FATECLOUD_DB_TYPE
+              value: "mysql"
+            - name: FATECLOUD_DB_HOST
+              value: "mariadb"
+            - name: FATECLOUD_DB_PORT
+              value: "3306"
+            - name: FATECLOUD_DB_NAME
+              value: "kube_fate"
+            - name: FATECLOUD_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: kubefate-secret
+                  key: mariadbUsername
+            - name: FATECLOUD_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kubefate-secret
+                  key: mariadbPassword
             - name: FATECLOUD_REPO_NAME
               value: "kubefate"
             - name: FATECLOUD_REPO_URL
-              value: "https://federatedai.github.io/KubeFATE/"
+              value: "https://federatedai.github.io/KubeFATE"
             - name: FATECLOUD_USER_USERNAME
-              value: "admin"
+              valueFrom:
+                secretKeyRef:
+                  name: kubefate-secret
+                  key: kubefateUsername
             - name: FATECLOUD_USER_PASSWORD
-              value: "admin"
+              valueFrom:
+                secretKeyRef:
+                  name: kubefate-secret
+                  key: kubefatePassword
             - name: FATECLOUD_SERVER_ADDRESS
               value: "0.0.0.0"
             - name: FATECLOUD_SERVER_PORT
               value: "8080"
             - name: FATECLOUD_LOG_LEVEL
               value: "debug"
+            - name: FATECLOUD_LOG_NOCOLOR
+              value: "true"
           ports:
             - containerPort: 8080
+          resources:
+            limits:
+              memory: "4Gi"
+              cpu: "2"
+            requests:
+              memory: 512Mi
+              cpu: "0.5"
+          livenessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 1
+            successThreshold: 1
+            failureThreshold: 3
+          startupProbe:
+            tcpSocket:
+              port: 8080
+            failureThreshold: 30
+            periodSeconds: 10
       restartPolicy: Always
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mongo
+  name: mariadb
   namespace: kube-fate
   labels:
-    fate: mongo
+    fate: mariadb
 spec:
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      fate: mongo
+      fate: mariadb
   template:
     metadata:
       labels:
-        fate: mongo
+        fate: mariadb
     spec:
+      serviceAccountName: kubefate-admin
       containers:
-        - image: mongo
+        - image: mariadb:10
           imagePullPolicy: IfNotPresent
-          name: mongo
+          name: mariadb
           env:
-            - name: MONGO_INITDB_ROOT_USERNAME
-              value: root
-            - name: MONGO_INITDB_ROOT_PASSWORD
-              value: root
+            - name: MYSQL_DATABASE
+              value: "kube_fate"
+            - name: MYSQL_ALLOW_EMPTY_PASSWORD
+              value: "1"
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: kubefate-secret
+                  key: mariadbUsername
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kubefate-secret
+                  key: mariadbPassword
           ports:
-            - containerPort: 27017
+            - containerPort: 3306
+          resources:
+            limits:
+              memory: "4Gi"
+              cpu: "2"
+            requests:
+              memory: 512Mi
+              cpu: "0.5"
           volumeMounts:
-            - name: mongo-data
-              mountPath: /data/db
+            - name: mariadb-data
+              mountPath: /var/lib/mysql
+          livenessProbe:
+            exec:
+              command:
+              - mysqladmin
+              - ping
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+              - mysqladmin
+              - ping
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 1
+            successThreshold: 1
+            failureThreshold: 3
       restartPolicy: Always
       volumes:
-        - name: mongo-data
-          hostPath:
-            path: /home/kubefate/mongodb/db
-            type: DirectoryOrCreate
+        - name: mariadb-data
+          # If you want persistence, please modify it to the PV you want to use.
+          emptyDir: {}
+          # hostPath:
+          #   path: /data/kubefate/mysql/db
+          #   type: DirectoryOrCreate
+          # persistentVolumeClaim:
+          #   claimName: "mariadb-data"
+# ---
+# apiVersion: v1
+# kind: PersistentVolumeClaim
+# metadata:
+#   name: mariadb-data
+#   namespace: kube-fate
+# spec:
+#   accessModes:
+#   - ReadWriteOnce
+#   storageClassName: <MyStorageClassName>
+#   resources:
+#     requests:
+#       storage: 1Gi
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: mongo
+  name: mariadb
   namespace: kube-fate
   labels:
-    fate: mongo
+    fate: mariadb
 spec:
   ports:
-    - name: "27017"
-      port: 27017
-      targetPort: 27017
+    - name: "3306"
+      port: 3306
+      targetPort: 3306
       protocol: TCP
   type: ClusterIP
   selector:
-    fate: mongo
+    fate: mariadb
 ---
 apiVersion: v1
 kind: Service
@@ -123,18 +224,21 @@ spec:
   selector:
     fate: kubefate
 ---
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: kubefate
   namespace: kube-fate
-  annotations:
 spec:
+  ingressClassName: nginx
   rules:
-    - host: kubefate.net
+    - host: example.com
       http:
         paths:
           - path: /
+            pathType: Prefix
             backend:
-              serviceName: kubefate
-              servicePort: 8080
+              service: 
+                name: kubefate
+                port:
+                  number: 8080

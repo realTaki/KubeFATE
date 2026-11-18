@@ -1,0 +1,223 @@
+{{- $partyId := (.partyId | int64 | toString) }}
+partyId: {{ .partyId | int64 | toString }}
+partyName: {{ .name }}
+
+# containers images 
+image:
+  registry: {{ .registry | default "federatedai" }}
+  isThridParty: {{ empty .registry | ternary  "false" "true" }}
+  pullPolicy: {{ .pullPolicy | default "IfNotPresent" }}
+  {{- with .imagePullSecrets }}
+  imagePullSecrets:
+{{ toYaml . | indent 2 }}
+  {{- end }}
+  
+persistence:
+  enabled: {{ .persistence | default "false" }}
+  
+{{- with .istio }}
+istio:
+  enabled: {{ .enabled | default false }}
+{{- end }}
+
+{{- with .podSecurityPolicy }}
+podSecurityPolicy:
+  enabled: {{ .enabled | default false }}
+{{- end }}
+
+ingressClassName: {{ .ingressClassName | default "nginx"}}
+
+{{- with .ingress }}
+ingress:
+  {{- with .servingProxy }}
+  servingProxy: 
+    {{- with .annotations }}
+    annotations: 
+{{ toYaml . | indent 6 }}
+    {{- end }}
+    {{- with .hosts }}
+    hosts:
+{{ toYaml . | indent 6 }}
+    {{- end }}
+    {{- with .tls }}
+    tls: 
+{{ toYaml . | indent 6 }}
+    {{- end }}
+  {{- end }}
+  
+  {{- with .servingAdmin }}
+  servingAdmin: 
+    {{- with .annotations }}
+    annotations: 
+{{ toYaml . | indent 6 }}
+    {{- end }}
+    {{- with .hosts }}
+    hosts:
+{{ toYaml . | indent 6 }}
+    {{- end }}
+    {{- with .tls }}
+    tls: 
+{{ toYaml . | indent 6 }}
+    {{- end }}
+  {{- end }}
+  
+{{- end }}
+
+servingProxy: 
+  include: {{ has "servingProxy" .modules }}
+  {{- with .servingProxy }}
+  ip: serving-proxy
+  type: {{ .type }}
+  nodePort: {{ .nodePort }}
+  loadBalancerIP: {{ .loadBalancerIP }}
+
+  {{- with .partyList }}
+  partyList:
+  {{- range . }}
+  - partyId: {{ .partyId }}
+    partyIp: {{ .partyIp }}
+    partyPort: {{ .partyPort }}
+  {{- end }}
+  {{- end }}
+  
+  {{- with .exchange }}
+  exchange:
+    partyIp: {{ .ip }}
+    partyPort: {{ .port }}
+  {{- end }}
+  
+  {{- with .nodeSelector }}
+  nodeSelector:
+{{ toYaml . | indent 4 }}
+  {{- end }}
+  {{- with .tolerations }}
+  tolerations:
+{{ toYaml . | indent 4 }}
+  {{- end }}
+  {{- with .affinity }}
+  affinity:
+{{ toYaml . | indent 4 }}
+  {{- end }}
+
+  {{- end }}
+
+servingRedis:
+  include: {{ has "servingRedis" .modules }}
+
+  {{- with .servingRedis }}
+
+  password: {{ .password | default "fate_dev" }}
+  
+  subPath: {{ .subPath }}
+  existingClaim: {{ .existingClaim }}
+  storageClass: {{ .storageClass | default "serving-redis" }}
+  accessMode: {{ .accessMode | default "ReadWriteOnce" }}
+  size: {{ .size | default "1Gi" }}
+  
+  {{- with .nodeSelector }}
+  nodeSelector:
+{{ toYaml . | indent 4 }}
+  {{- end }}
+  {{- with .tolerations }}
+  tolerations:
+{{ toYaml . | indent 4 }}
+  {{- end }}
+  {{- with .affinity }}
+  affinity:
+{{ toYaml . | indent 4 }}
+  {{- end }}
+  
+  {{- end }}
+
+
+servingServer:
+  include: {{ has "servingServer" .modules }}
+  
+  {{- with .servingServer }}
+  nodePort: {{ .nodePort }}
+  type: {{ .type | default "ClusterIP" }}
+  loadBalancerIP: {{ .loadBalancerIP }}
+  {{- with .fateflow }}
+  fateflow:
+    ip: {{ .ip }}
+    port: {{ .port }}
+  {{- end }}
+  
+  cacheSwitch: {{ .cacheType | default "false" }}
+  cacheType: {{ .cacheType | default "local" }}
+  singleAdaptor: {{ .singleAdaptor | default "com.webank.ai.fate.serving.adaptor.dataaccess.MockAdapter" }}
+  batchAdaptor: {{ .batchAdaptor | default "com.webank.ai.fate.serving.adaptor.dataaccess.MockBatchAdapter" }}
+  AdapterURL: {{ .AdapterURL | default "http://127.0.0.1:9380/v1/http/adapter/getFeature" }}
+
+  subPath: {{ .subPath }}
+  existingClaim: {{ .existingClaim }}
+  storageClass: {{ .storageClass | default "serving-redis" }}
+  accessMode: {{ .accessMode | default "ReadWriteOnce" }}
+  size: {{ .size | default "1Gi" }}
+  {{- with .nodeSelector }}
+  nodeSelector:
+{{ toYaml . | indent 4 }}
+  {{- end }}
+  {{- with .tolerations }}
+  tolerations:
+{{ toYaml . | indent 4 }}
+  {{- end }}
+  {{- with .affinity }}
+  affinity:
+{{ toYaml . | indent 4 }}
+  {{- end }}
+  
+  {{- end }}
+
+servingZookeeper:
+  include: {{ has "servingZookeeper" .modules }}
+  {{- with .servingZookeeper }}
+  
+  {{- with .nodeSelector }}
+  nodeSelector:
+{{ toYaml . | indent 4 }}
+  {{- end }}
+  {{- with .tolerations }}
+  tolerations:
+{{ toYaml . | indent 4 }}
+  {{- end }}
+  {{- with .affinity }}
+  affinity:
+{{ toYaml . | indent 4 }}
+  {{- end }}
+
+  subPath: {{ .subPath }}
+  storageClassName: {{ .storageClassName | default "managed-nfs-storage" }}
+  existingClaim: {{ .existingClaim }}
+  storageClass: {{ .storageClass }}
+  accessMode: {{ .accessMode | default "ReadWriteOnce" }}
+  size: {{ .size | default "1Gi" }}
+  
+  {{- end }}
+  
+servingAdmin:
+  include: {{ has "servingAdmin" .modules }}
+  {{- with .servingAdmin }}
+  
+  ingressHost: {{ .ingressHost | default (printf "%s.serving-admin.example.com" $partyId) }}
+  username: {{ .username }}
+  password: {{ .password }}
+  
+  {{- with .nodeSelector }}
+  nodeSelector:
+{{ toYaml . | indent 4 }}
+  {{- end }}
+  {{- with .tolerations }}
+  tolerations:
+{{ toYaml . | indent 4 }}
+  {{- end }}
+  {{- with .affinity }}
+  affinity:
+{{ toYaml . | indent 4 }}
+  {{- end }}
+  
+  {{- end }}
+
+externalRedisIp: {{ .externalRedisIp }}
+externalRedisPort: {{ .externalRedisPort }}
+externalRedisPassword: {{ .externalRedisPassword }}

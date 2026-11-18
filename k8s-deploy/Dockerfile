@@ -1,21 +1,32 @@
-FROM golang as build
+ARG ARCH=amd64
 
-WORKDIR /data/projects/fatecloud
+FROM golang:1.25 AS builder
 
-COPY . ./
+WORKDIR /workspace
 
-RUN go build -a -ldflags '-s' -installsuffix cgo -o kubefate kubefate.go
+COPY go.mod go.mod
+COPY go.sum go.sum
 
-FROM centos
+RUN go mod download
 
-WORKDIR /data/projects/fatecloud
+COPY kubefate.go kubefate.go
+COPY pkg/ pkg/
+COPY docs/docs.go docs/docs.go 
+COPY config.yaml config.yaml
 
-COPY --from=0 /data/projects/fatecloud/kubefate /data/projects/fatecloud/
-COPY --from=0 /data/projects/fatecloud/config.yaml /data/projects/fatecloud/
+ARG LDFLAGS
+ARG ARCH
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${ARCH} GO111MODULE=on go build -a -ldflags '-s' -installsuffix cgo -o kubefate kubefate.go
+
+FROM gcr.io/distroless/static:nonroot-${ARCH}
+WORKDIR /
+COPY --from=builder /workspace/kubefate .
+COPY --from=builder /workspace/config.yaml  .
+
+USER nonroot:nonroot
 
 EXPOSE 8080
 
-CMD ["./kubefate service"]
+CMD ["service"]
 
-ENTRYPOINT ["/bin/sh","-c"]
-
+ENTRYPOINT ["/kubefate"]

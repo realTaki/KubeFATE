@@ -1,8 +1,11 @@
 # TODO
 # persistent layer
 
+log:
+  level: info
 user:
   username: admin
   password: admin
 
-serviceurl: kubefate.net
+serviceurl: example.com
+safeconnect: false

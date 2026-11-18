@@ -1,9 +1,25 @@
+/*
+ * Copyright 2019-2022 VMware, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 package cli
 
 import (
 	"errors"
-	"github.com/FederatedAI/KubeFATE/k8s-deploy/pkg/job"
-	"github.com/json-iterator/go"
+
+	"github.com/FederatedAI/KubeFATE/k8s-deploy/pkg/modules"
+	"github.com/fatih/color"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v2"
 
@@ -22,8 +38,9 @@ func ClusterCommand() *cli.Command {
 			ClusterDeleteCommand(),
 			ClusterInstallCommand(),
 			ClusterUpdateCommand(),
+			LogCommand(),
 		},
-		Usage: "Manage cluster install, delete and update",
+		Usage: "Manage Cluster install, delete and update",
 	}
 }
 
@@ -36,10 +53,10 @@ func ClusterListCommand() *cli.Command {
 				Name:    "all",
 				Aliases: []string{"A"},
 				Value:   false,
-				Usage:   "List all clusters including deleted ones",
+				Usage:   "List all Clusters including deleted ones",
 			},
 		},
-		Usage: "Show all clusters list",
+		Usage: "Show all Clusters list",
 		Action: func(c *cli.Context) error {
 			all := c.Bool("all")
 			cluster := new(Cluster)
@@ -54,7 +71,7 @@ func ClusterInfoCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "describe",
 		Flags: []cli.Flag{},
-		Usage: "Describe a cluster's detail info",
+		Usage: "Describe a Cluster's detail info",
 		Action: func(c *cli.Context) error {
 			var uuid string
 			if c.Args().Len() > 0 {
@@ -73,7 +90,7 @@ func ClusterDeleteCommand() *cli.Command {
 		Name:    "delete",
 		Aliases: []string{"del"},
 		Flags:   []cli.Flag{},
-		Usage:   "Delete a cluster",
+		Usage:   "Delete a Cluster",
 		Action: func(c *cli.Context) error {
 			var uuid string
 			if c.Args().Len() > 0 {
@@ -83,7 +100,7 @@ func ClusterDeleteCommand() *cli.Command {
 			}
 
 			cluster := new(Cluster)
-			log.Debug().Str("uuid", uuid).Msg("cluster delete uuid")
+			log.Debug().Str("uuid", uuid).Msg("Cluster delete uuid")
 			return DeleteItem(cluster, uuid)
 		},
 	}
@@ -97,16 +114,16 @@ func ClusterInstallCommand() *cli.Command {
 				Name:     "file",
 				Aliases:  []string{"f"},
 				Value:    "",
-				Usage:    "chart cluster.yaml",
+				Usage:    "YAML configuration file for the Cluster",
 				Required: true,
 			},
 			&cli.BoolFlag{
 				Name:  "cover",
 				Value: false,
-				Usage: "If the cluster already exists, overwrite the installation",
+				Usage: "If the Cluster already exists, overwrite the installation",
 			},
 		},
-		Usage: "Install a new cluster",
+		Usage: "Install a new Cluster",
 		Action: func(c *cli.Context) error {
 
 			valTemValPath := c.String("file")
@@ -118,7 +135,7 @@ func ClusterInstallCommand() *cli.Command {
 			if err != nil {
 				return err
 			}
-			log.Debug().Str("yaml", string(clusterConfig)).Msg("ReadFile success")
+			log.Debug().Str("yaml", string(clusterConfig)).Msg("ReadFile Success")
 
 			var m map[string]interface{}
 			err = yaml.Unmarshal(clusterConfig, &m)
@@ -128,23 +145,36 @@ func ClusterInstallCommand() *cli.Command {
 
 			name, ok := m["name"]
 			if !ok {
-				return errors.New("name not found, check your cluster file")
+				return errors.New("name not found, check your Cluster file")
 			}
 
 			namespace, ok := m["namespace"]
 			if !ok {
-				return errors.New("namespace not found, check your cluster file")
+				return errors.New("namespace not found, check your Cluster file")
 			}
 
 			chartVersion, ok := m["chartVersion"]
-			if !ok {
-				return errors.New("chartVersion not found, check your cluster file")
+			if !ok || chartVersion == "" {
+				return errors.New("chartVersion not found, check your cluster.yaml file")
 			}
 
 			chartName, ok := m["chartName"]
-			if !ok {
-				chartName = ""
-				//return errors.New("chartName not found, check your cluster file")
+			if !ok || chartName == "" {
+				return errors.New("chartName not found, check your cluster.yaml file")
+			}
+
+			var errs []error
+			template, err := GetValueTemplateExample(chartName.(string), chartVersion.(string))
+			errs = append(errs, err)
+			skippedKeys := append(getSkippedKeys(m), "route_table")
+			errs = append(errs, ValidateYaml(template, string(clusterConfig), skippedKeys)...)
+			warn := !ContainsSkipError(errs)
+			for _, err := range errs {
+				if err != nil && warn {
+					color.Yellow("Config Warning: %s\n", err.Error())
+				} else if err != nil {
+					log.Debug().Str("validation", err.Error()).Msg("Skipped Error")
+				}
 			}
 
 			var json = jsoniter.ConfigCompatibleWithStandardLibrary
@@ -155,7 +185,7 @@ func ClusterInstallCommand() *cli.Command {
 			}
 
 			cluster := new(Cluster)
-			args := &job.ClusterArgs{
+			args := &modules.ClusterArgs{
 				Name:         name.(string),
 				Namespace:    namespace.(string),
 				ChartName:    chartName.(string),
@@ -181,20 +211,27 @@ func ClusterUpdateCommand() *cli.Command {
 				Name:     "file",
 				Aliases:  []string{"f"},
 				Value:    "",
-				Usage:    "chart cluster.yaml",
+				Usage:    "Enter your own configured Cluster.yaml file",
 				Required: true,
 			},
+			&cli.BoolFlag{
+				Name:  "keepUpgradeJob",
+				Value: false,
+				Usage: "Only useful when upgrading the FML framework's version. If true, will keep the" +
+					"upgrade manager's job on the k8s cluster. Otherwise, will clean up the job",
+			},
 		},
-		Usage: "Update a cluster",
+		Usage: "Update a Cluster",
 		Action: func(c *cli.Context) error {
-			valTemValPath := c.String("file")
+			keepUpgradeJob := c.Bool("keepUpgradeJob")
+			log.Debug().Bool("keepUpgradeJob", keepUpgradeJob).Msg("install flag")
 
+			valTemValPath := c.String("file")
 			clusterConfig, err := ioutil.ReadFile(valTemValPath)
 			if err != nil {
 				return err
 			}
-
-			log.Debug().Str("yaml", string(clusterConfig)).Msg("ReadFile success")
+			log.Debug().Str("yaml", string(clusterConfig)).Msg("ReadFile Success")
 
 			var m map[string]interface{}
 			err = yaml.Unmarshal(clusterConfig, &m)
@@ -204,17 +241,22 @@ func ClusterUpdateCommand() *cli.Command {
 
 			name, ok := m["name"]
 			if !ok {
-				return errors.New("name not found, check your cluster file")
+				return errors.New("name not found, check your Cluster file")
 			}
 
 			namespace, ok := m["namespace"]
 			if !ok {
-				return errors.New("namespace not found, check your cluster file")
+				return errors.New("namespace not found, check your Cluster file")
 			}
 
 			chartVersion, ok := m["chartVersion"]
 			if !ok {
-				return errors.New("chartVersion not found, check your cluster file")
+				return errors.New("chartVersion not found, check your Cluster file")
+			}
+
+			chartName, ok := m["chartName"]
+			if !ok {
+				return errors.New("chartVersion not found, check your Cluster file")
 			}
 
 			var json = jsoniter.ConfigCompatibleWithStandardLibrary
@@ -225,12 +267,14 @@ func ClusterUpdateCommand() *cli.Command {
 			}
 
 			cluster := new(Cluster)
-			args := &job.ClusterArgs{
-				Name:         name.(string),
-				Namespace:    namespace.(string),
-				ChartVersion: chartVersion.(string),
-				Cover:        false,
-				Data:         valBJ,
+			args := &modules.ClusterArgs{
+				Name:           name.(string),
+				Namespace:      namespace.(string),
+				ChartVersion:   chartVersion.(string),
+				ChartName:      chartName.(string),
+				Cover:          false,
+				Data:           valBJ,
+				KeepUpgradeJob: keepUpgradeJob,
 			}
 
 			body, err := json.Marshal(args)

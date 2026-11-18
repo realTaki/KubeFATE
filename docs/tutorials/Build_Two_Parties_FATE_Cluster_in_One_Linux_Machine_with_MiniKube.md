@@ -1,337 +1,661 @@
 # Tutorial Goal
-In this tutorial, we will from scratch to install a MiniKube for Kubernetes and deploy KubeFATE sevice on it. Then, we will install a two parties FATE clusters. Each of them is deployed in a given namespace. We are able to run federated learning with these two parties, and check FATE-Dashboard for the status of learning job.
+In this tutorial, we will from scratch to install a MiniKube for Kubernetes and deploy KubeFATE service on it. Then, we 
+will install a two-parties FATE cluster. Each of them is deployed in a given namespace. We are able to run federated 
+learning with these two parties, and check FATE-Dashboard for the status of the learning job.
 
-After the tutorial, the deployment architecture looks like following diagram.
+After the tutorial, the deployment architecture looks like the following diagram.
 
 <div align="center">
-  <img src="./images/goal.png">
+  <img src="../images/fate_on_spark_with_pulsar.png">
 </div>
 
 # Prerequisites
-1. A Linux machine. The verified OS is Ubuntu 18.04 LTS. <font color="red">* The demo machine is 8 core, 32G memory.</font>
-2. A domain name for ingress of KubeFATE service and FATE-Dashboard. A alternative is set host both to deploying machine and client to access FATE-Dashboard. In this tutorial, we suppose to the latter case.  
-3. Docker have been installed in the Linux machine. To install a Docker, please refer to [Install Docker in Ubuntu](https://docs.docker.com/install/linux/docker-ce/ubuntu/)
-4. Network connectivity to dockerhub, and google storage
-5. Create a folder for whole tutorial
-	```
-	cd ~ && mkdir demo && cd demo
-	```
+1. A Linux machine. The verified OS is CentOS Linux release 7.9.2009 (Core). <font color="red">* The demo machine is 
+   8 core, 16G memory.</font>
+2. A domain name for ingress of KubeFATE service, Jupyter Notebook, and FATE-Dashboard. An alternative is to set host 
+   both to deploying machine and client to access these endpoints. In this tutorial, we suppose to the latter case.  
+3. Docker has been installed in the Linux machine. To install a Docker, please refer to [Install Docker in Ubuntu]
+   (https://www.digitalocean.com/community/tutorials/how-to-install-and-use-docker-on-centos-7)
+4. Configure username and password for a images repository/registry after the docker has been installed, please refer to
+   [use image pull secrets](https://github.com/federatedai/KubeFATE/blob/master/docs/Use_image_pull_secrets.md).
+5. Network connectivity to dockerhub or 163 Docker Image Registry, and google gcr.
+6. Setup the global KubeFATE version using in the tutorial and create a folder for the whole tutorial.
+```
+export fate_version=v2.0.0 && export kubefate_version=v1.4.5 && cd ~ && mkdir demo && cd demo
+```
 
-**<div align="center"><font color="red">!!!Note: in this tutorial, the IP of machine we used is 192.168.100.123. Please change it to your machine's IP in all following commands and config files.</font></div>**
+Notes:
+* When talking about KubeFATE version, usually there are 3 notions:
+   * The KubeFATE CLI version, in this tutorial, it is v1.4.5.
+   * The KubeFATE service version, in this tutorial, it is v1.4.5.
+   * The FATE version, in this tutorial, it is v2.0.0, it also means the version of the helm chart of FATE, currently we use this version to tag the KubeFATE GitHub master branch.
+* **<font color="red">In this tutorial, the IP of the machine we used is 192.168.100.123. Please change it to your machine's IP in all the following commands and config files.</font></div>**
 
 # Start Tutorial
-## Install related tools
-The following tools and version have been verified, which are the latest version by the date drafting this tutorial.
-1. MiniKube: v1.7.3
-2. kubectl: v1.17.3
-3. kubefate:
-	* Release: v1.3.1-a
-	* Service version: v1.0.2
-	* Commandline version: v1.0.2
+## Install the dependencies
+The following tools and versions have been verified, we assume any versions larger than below versions can also work, 
+if these dependencies can align the forward compatible principle.
+1. MiniKube: v1.19.0
+2. kubectl: v1.19.0
 
 ### Install kubectl
 ```
-curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.17.3/bin/linux/amd64/kubectl && chmod +x ./kubectl && sudo mv ./kubectl /usr/bin
+curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.19.0/bin/linux/amd64/kubectl && chmod +x ./kubectl && sudo mv ./kubectl /usr/bin
 ```
 Try to verify if kubectl installed,
 ```
-layne@machine:~/demo$ kubectl version
-Client Version: version.Info{Major:"1", Minor:"17", GitVersion:"v1.17.3", GitCommit:"06ad960bfd03b39c8310aaf92d1e7c12ce618213", GitTreeState:"clean", BuildDate:"2020-02-11T18:14:22Z", GoVersion:"go1.13.6", Compiler:"gc", Platform:"linux/amd64"}
-The connection to the server localhost:8080 was refused - did you specify the right host or port?
+kubefate@machine:~/demo$ kubectl version
+Client Version: version.Info{Major:"1", Minor:"19", GitVersion:"v1.19.0", GitCommit:"e19964183377d0ec2052d1f1fa930c4d7575bd50", GitTreeState:"clean", BuildDate:"2020-08-26T14:30:33Z", GoVersion:"go1.15", Compiler:"gc", Platform:"linux/amd64"}
 ```
 ### Install MiniKube
 ```
-curl -LO https://github.com/kubernetes/minikube/releases/download/v1.7.3/minikube-linux-amd64 && mv minikube-linux-amd64 minikube && chmod +x minikube && sudo mv ./minikube /usr/bin
+curl -LO https://github.com/kubernetes/minikube/releases/download/v1.19.0/minikube-linux-amd64 && mv minikube-linux-amd64 minikube && chmod +x minikube && sudo mv ./minikube /usr/bin
 ```
 Try to verify if MiniKube installed,
 ```
-layne@machine:~/demo$ minikube version
-minikube version: v1.7.3
-commit: 436667c819c324e35d7e839f8116b968a2d0a3ff
+kubefate@machine:~/demo$ minikube version
+minikube version: v1.19.0
+commit: 15cede53bdc5fe242228853e737333b09d4336b5
 ```
-### Download KubeFATE Release Pack and Install KubeFATE Command Lines
-Go to [KubeFATE Release](https://github.com/FederatedAI/KubeFATE/releases), and find the latest kubefate-k8s release pack. 
-```
-curl -LO https://github.com/FederatedAI/KubeFATE/releases/download/v1.3.0-a/kubefate-k8s-v1.3.0-a.tar.gz && tar -xzf ./kubefate-k8s-v1.3.0-a.tar.gz
-```
-Then we will get the release pack of KubeFATE, verify it,
-```
-layne@machine:~/demo$ ls
-cluster.yaml  config.yaml  kubefate  kubefate-k8s-v1.3.0-a.tar.gz  kubefate.yaml  rbac-config.yaml
-```
-Move the kubefate executable binary to path,
-```
-chmod +x ./kubefate && sudo mv ./kubefate /usr/bin
-```
-Try to verify if kubefate works,
-```
-layne@machine:~/demo$ kubefate version
-* kubefate service connection error, Get http://kubefate.net/v1/version: dial tcp: lookup kubefate.net: no such host
-* kubefate commandLine version=v1.0.2
-```
-It is fine only command line version shows and get error on KubeFATE service's version, because we have not deployed KubeFATE service yet.
 
-## Install Kubernetes with MiniKube
-In a Linux machine, we suggest use Docker as hypervisor, which is easy. The details related to [Install MiniKube - Install a Hypervisor](https://kubernetes.io/docs/tasks/tools/install-minikube/#install-a-hypervisor). It is only one command,
+### Install Kubernetes with MiniKube
+In a Linux machine, we suggest using Docker as the hypervisor, which is easy. The details related to
+[Install MiniKube - Install a Hypervisor](https://kubernetes.io/docs/tasks/tools/install-minikube/#install-a-hypervisor).
+It is only one command,
 ```
-sudo minikube start --vm-driver=none
+sudo minikube start --vm-driver=none --kubernetes-version v1.19.0 --cni=flannel
 ```
-Wait a few seconds for the command finish. Verify it, 
+Wait a few seconds until the command finishes, then try to verify if Kubernetes installed,
 ```
-layne@machine:~/demo$ sudo minikube status
+kubefate@machine:~/demo$ sudo minikube status
 host: Running
 kubelet: Running
 apiserver: Running
 kubeconfig: Configured
 ```
-It means Kubernetes has been installed in your machine!
+It means Kubernetes has been installed on your machine!
 
-However, by default MiniKube will not enable Ingress addon, which KubeFATE required, we need to enable it manually,
+However, by default MiniKube will not enable the Ingress addon, which KubeFATE required, we need to enable it by 
+another command.
 ```
 sudo minikube addons enable ingress
 ```
-Till now, Kubernetes have been ready. 
 
-## Deploy KubeFATE service
-### Create kube-fate namespace and account for KubeFATE service
+Check the pod status by `kubectl get pods -A`
+When all the pods are in the ready state, it means your Kubernetes cluster is ready.
+
+## Setup Kubefate
+### Install KubeFATE CLI
+Go to [KubeFATE Release](https://github.com/FederatedAI/KubeFATE/releases), and find the latest kubefate-k8s release 
+pack, which is `v2.0.0` as set to ENVs before. (replace ${fate_version} with the newest version available)
+```
+curl -LO https://github.com/FederatedAI/KubeFATE/releases/download/${fate_version}/kubefate-k8s-${fate_version}.tar.gz && tar -xzf ./kubefate-k8s-${fate_version}.tar.gz
+```
+Then we will get the release pack of KubeFATE, verify it,
+```
+kubefate@machine:~/demo cd kubefate
+kubefate@machine:~/kubefate ls
+cluster-serving.yaml cluster-spark-rabbitmq.yaml cluster.yaml examples rbac-config.yaml
+cluster-spark-pulsar.yaml cluster-spark-slim.yaml config.yaml kubefate.yaml
+```
+Move the KubeFATE executable binary to path,
+```
+chmod +x ./kubefate && sudo mv ./kubefate /usr/bin
+```
+Try to verify if the KubeFATE CLI works,
+```
+kubefate@machine:~/kubefate$ kubefate version
+* kubefate commandLine version=v1.4.5
+* kubefate service connection error, resp¬.StatusCode=404, error: <?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+         "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+        <head>
+                <title>404 - Not Found</title>
+        </head>
+        <body>
+                <h1>404 - Not Found</h1>
+                <script type="text/javascript" src="//wpc.75674.betacdn.net/0075674/www/ec_tpm_bcon.js"></script>
+        </body>
+</html>
+```
+It is fine that only the command line version shows up but get an error on KubeFATE service's version because we have not 
+deployed the KubeFATE service yet.
+
+### Deploy KubeFATE service
+#### 1. Load the docker image of the KubeFATE service
+Download the KubeFATE Server v1.4.5's docker image,
+```
+curl -LO https://github.com/FederatedAI/KubeFATE/releases/download/${fate_version}/kubefate-${kubefate_version}.docker
+```
+and load into local Docker. Please note that, because we are using MiniKube, which is an all-in-one deployment of
+Kubernetes, loading image to local is work for this tutorial. If you are running a cluster-installed Kubernetes,
+the image needs to be loaded into [Docker Registry](https://docs.docker.com/registry/introduction/) or
+[Harbor](https://goharbor.io/). For the details of using Harbor as a local image registry, please refer to:
+https://github.com/FederatedAI/KubeFATE/blob/master/registry/README.md.
+```
+docker load < kubefate-v1.4.5.docker
+```
+#### 2. Create kube-fate namespace and account for KubeFATE service
 We have prepared the yaml for creating kube-fate namespace, as well as creating a service account in rbac-config.yaml in your working folder. Just apply it,
 ```
-kubectl apply -f ./rbac-config.yaml
+kubefate@machine:~/kubefate kubectl apply -f ./rbac-config.yaml
 ```
-### Deploy KubeFATE serving to kube-fate Namespace
-The yaml files are also prepared in working folder, just apply it,
+
+#### 3. (Optional) Use 163 Image Registory instead of Dockerhub
+**Because the [Dockerhub latest limitation](https://docs.docker.com/docker-hub/download-rate-limit/), we suggest 
+using the 163 Image Repository instead.**
+```
+sed 's/mariadb:10/hub.c.163.com\/federatedai\/mariadb:10/g' kubefate.yaml > kubefate_163.yaml
+sed 's/registry: ""/registry: "hub.c.163.com\/federatedai"/g' cluster.yaml > cluster_163.yaml
+```
+
+#### 4. Deploy KubeFATE serving to kube-fate Namespace
+
+Apply the KubeFATE deployment YAML.
+```
+kubectl apply -f ./kubefate_163.yaml
+```
+or 
 ```
 kubectl apply -f ./kubefate.yaml
 ```
+if not using the 163 image hub (**same for all the below commands**). 
+
 
 We can verify it with `kubectl get all,ingress -n kube-fate`, if everything looks like,
 ```
 
-layne@machine:~/demo$ kubectl get all,ingress -n kube-fate
+kubefate@machine:~/demo$ kubectl get all,ingress -n kube-fate
 NAME                            READY   STATUS    RESTARTS   AGE
-pod/kubefate-6d576d6c88-mz6ds   1/1     Running   0          16s
-pod/mongo-56684d6c86-4ff5m      1/1     Running   0          16s
+pod/kubefate-5d97d65947-7hb2q   1/1     Running   0          51s
+pod/mariadb-69484f8465-44dlw    1/1     Running   0          51s
 
-NAME               TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)     AGE
-service/kubefate   ClusterIP   192.168.100.123   <none>        8080/TCP    16s
-service/mongo      ClusterIP   192.168.100.124     <none>        27017/TCP   16s
+NAME               TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+service/kubefate   ClusterIP   192.168.0.111   <none>        8080/TCP   50s
+service/mariadb    ClusterIP   192.168.0.112   <none>        3306/TCP   50s
 
 NAME                       READY   UP-TO-DATE   AVAILABLE   AGE
-deployment.apps/kubefate   1/1     1            1           16s
-deployment.apps/mongo      1/1     1            1           16s
+deployment.apps/kubefate   1/1     1            1           51s
+deployment.apps/mariadb    1/1     1            1           51s
 
 NAME                                  DESIRED   CURRENT   READY   AGE
-replicaset.apps/kubefate-6d576d6c88   1         1         1       16s
-replicaset.apps/mongo-56684d6c86      1         1         1       16s
+replicaset.apps/kubefate-5d97d65947   1         1         1       51s
+replicaset.apps/mariadb-69484f8465    1         1         1       51s
 
 NAME                          HOSTS          ADDRESS          PORTS   AGE
-ingress.extensions/kubefate   kubefate.net   192.168.100.123   80      16s
+ingress.extensions/kubefate   example.com   192.168.100.123   80      50s
 ```
 
-It means KubeFATE service have been deployed. 
+It means KubeFATE service has been deployed. 
 
-### Add kubefate.net to host file
-Note: if we have the domain name setup, this step can be skipped.
-```
-sudo -- sh -c "echo \"192.168.100.123 kubefate.net\"  >> /etc/hosts"
-```
-Verify it as,
-```
-layne@machine:~/demo$ ping -c 2 kubefate.net
-PING kubefate.net (192.168.100.123) 56(84) bytes of data.
-64 bytes from kubefate.net (192.168.100.123): icmp_seq=1 ttl=64 time=0.080 ms
-64 bytes from kubefate.net (192.168.100.123): icmp_seq=2 ttl=64 time=0.054 ms
+#### 5. (Optional) Add example.com to host file
+Note: if we have a dns service (such as AWS Route53) setup, which can help to mapping
+`example.com` to`192.168.100.123`, then this step can be skipped.
 
---- kubefate.net ping statistics ---
+Map the machine IP `192.168.100.123` （which is also the 'ADDRESS' field of 'ingress.extensions/kubefate'） above to `example.com`
+
+```
+sudo -- sh -c "echo \"192.168.100.123 example.com\"  >> /etc/hosts"
+```
+
+Verify if it works,
+```
+kubefate@machine:~/demo$ ping -c 2 example.com
+PING example.com (192.168.100.123) 56(84) bytes of data.
+64 bytes from example.com (192.168.100.123): icmp_seq=1 ttl=64 time=0.080 ms
+64 bytes from example.com (192.168.100.123): icmp_seq=2 ttl=64 time=0.054 ms
+
+--- example.com ping statistics ---
 2 packets transmitted, 2 received, 0% packet loss, time 1006ms
 rtt min/avg/max/mdev = 0.054/0.067/0.080/0.013 ms
 ```
-And the KubeFATE service version can be shown,
-```
-layne@machine:~/demo$ kubefate version
-* kubefate service version=v1.0.2
-* kubefate commandLine version=v1.0.2
-```
-Okay. The preparation have been done. Let's install FATE.
 
-## Install two FATE parties: fate-9999 and fate-10000
+When `example.com` well set, KubeFATE service version can be shown,
+```
+kubefate@machine:~/kubefate$ kubefate version
+* kubefate service version=v1.4.5
+* kubefate commandLine version=v1.4.5
+```
+Note: The `kubefate` CLI can only work in the same directory of config.yaml
+
+Okay. The preparation has been done. Let's install FATE.
+
+## Install the Fate clusters
+### Preparation
 Firstly, we need to prepare two namespaces: fate-9999 for party 9999, while fate-10000 for party 10000.
 ```
 kubectl create namespace fate-9999
 kubectl create namespace fate-10000
 ```
-Then copy the cluster.yaml sample in the working folder. One for party 9999, the other one for party 10000,
-```
-cp ./cluster.yaml fate-9999.yaml && cp ./cluster.yaml fate-10000.yaml
-```
-They are how FATE cluster will be deployed. Open each of them. 
 
-For fate-9999.yaml, modify it as following,
+If you are using dockerhub as the registry, you can create the docker credentials for these 2 namespaces because we will have several images to download.
+
+```
+DOCKER_REGISTRY_SERVER=docker.io
+DOCKER_USER=<your_user_name>
+DOCKER_PASSWORD=<your_password>
+
+kubectl -n fate-9999 create secret docker-registry myregistrykey \
+  --docker-server=$DOCKER_REGISTRY_SERVER \
+  --docker-username=$DOCKER_USER \
+  --docker-password=$DOCKER_PASSWORD
+  
+kubectl -n fate-10000 create secret docker-registry myregistrykey \
+  --docker-server=$DOCKER_REGISTRY_SERVER \
+  --docker-username=$DOCKER_USER \
+  --docker-password=$DOCKER_PASSWORD
+```
+
+We have several preset examples in `/kubefate/examples/party-9999/` and `/kubefate/examples/party-10000`.
+
+In this tutorial, we will take the Spark+Pulsar architecture as the example 
+
+For `/kubefate/examples/party-9999/cluster-spark-pulsar.yaml`, modify it as following:
 ```
 name: fate-9999
 namespace: fate-9999
-version: v1.3.0-a
+chartName: fate
+chartVersion: v2.0.0
 partyId: 9999
+registry: ""
+pullPolicy:
+imagePullSecrets:
+- name: myregistrykey
+persistence: false
+istio:
+  enabled: false
+podSecurityPolicy:
+  enabled: false
+ingressClassName: nginx
 modules:
-  - proxy
-  - egg
-  - fateboard
-  - fateflow
-  - federation
-  - metaService
-  - mysql
-  - redis
-  - roll
   - python
+  - mysql
+  - fateboard
+  - client
+  - spark
+  - hdfs
+  - nginx
+  - pulsar
 
-proxy:
+computing: Spark
+federation: Pulsar
+storage: HDFS
+algorithm: Basic
+device: CPU
+
+ingress:
+  fateboard:
+    hosts:
+    - name: party9999.fateboard.example.com
+  client:
+    hosts:
+    - name: party9999.notebook.example.com
+  spark:
+    hosts:
+    - name: party9999.spark.example.com
+  pulsar:
+    hosts:
+    - name: party9999.pulsar.example.com
+
+python:
   type: NodePort
-  nodePort: 30009
-  partyList:
-    - partyId: 10000
-      partyIp: 192.168.100.123
-      partyPort: 30010
+  httpNodePort: 30097
+  grpcNodePort: 30092
+  logLevel: INFO
 
-egg:
-  count: 1
+servingIp: 192.168.100.123
+servingPort: 30095
+
+nginx:
+  type: NodePort
+  httpNodePort: 30093
+  grpcNodePort: 30098
+  route_table:
+    10000:
+      fateflow:
+        - host: 192.168.100.123
+          http_port: 30103
+          grpc_port: 30108
+
+pulsar:
+  type: NodePort
+  httpNodePort: 30094
+  httpsNodePort: 30099
+  publicLB:
+    enabled: false
+  route_table:
+    9999:
+      host: pulsar
+      port: 6650
+      sslPort: 6651
+    10000:
+      host: 192.168.100.123
+      port: 30104
+      sslPort: 30109
+      proxy: ""
 ```
-
-We change following things:
-1. Remove the exchange part, and use p2p mode;
-2. Change the proxy part setting, which set the nodePort to 30009. This is the port proxy of party 9999 listen to;
-3. Change the partyList setting according to the proxy setting in party 10000. In my case, partyId is 10000, partyIp is 192.168.100.123 and partyPort is 30010;
-4. Change the count of egg setting from 3 to 1.
-
-For fate-10000, modify it as following,
+and for fate-10000:
 ```
 name: fate-10000
 namespace: fate-10000
-version: v1.3.0-a
+chartName: fate
+chartVersion: v2.0.0
 partyId: 10000
+registry: ""
+pullPolicy:
+imagePullSecrets:
+- name: myregistrykey
+persistence: false
+istio:
+  enabled: false
+ingressClassName: nginx
+podSecurityPolicy:
+  enabled: false
 modules:
-  - proxy
-  - egg
-  - fateboard
-  - fateflow
-  - federation
-  - metaService
-  - mysql
-  - redis
-  - roll
   - python
+  - mysql
+  - fateboard
+  - client
+  - spark
+  - hdfs
+  - nginx
+  - pulsar
 
-proxy:
+computing: Spark
+federation: Pulsar
+storage: HDFS
+algorithm: Basic
+device: CPU
+
+ingress:
+  fateboard:
+    hosts:
+    - name: party10000.fateboard.example.com
+  client:
+    hosts:
+    - name: party10000.notebook.example.com
+  spark:
+    hosts:
+    - name: party10000.spark.example.com
+  pulsar:
+    hosts:
+    - name: party10000.pulsar.example.com
+
+python:
   type: NodePort
-  nodePort: 30010
-  partyList:
-    - partyId: 9999
-      partyIp: 192.168.100.123
-      partyPort: 30009
+  httpNodePort: 30107
+  grpcNodePort: 30102
+  logLevel: INFO
 
-egg:
-  count: 1
+servingIp: 192.168.100.123
+servingPort: 30105
+
+nginx:
+  type: NodePort
+  httpNodePort: 30103
+  grpcNodePort: 30108
+  route_table:
+    9999:
+      fateflow:
+        - host: 192.168.100.123
+          http_port: 30093
+          grpc_port: 30098
+
+pulsar:
+  type: NodePort
+  httpNodePort: 30104
+  httpsNodePort: 30109
+  publicLB:
+    enabled: false
+  route_table:
+    9999:
+      host: 192.168.100.123
+      port: 30094
+      sslPort: 30099
+      proxy: ""
+    10000:
+      host: pulsar
+      port: 6650
+      sslPort: 6651
+```
+For the two files, pay extra attention of modify the partyId to the correct number otherwise you are not able to access
+the notebook or the fateboard.
+
+**NOTE: strongly recommend read following document**
+For more what each field means, please refer to: 
+https://githubcom/FederatedAI/KubeFATE/blob/master/docs/configurations/FATE_cluster_configuration.md.
+
+### Install the FATE clusters
+Okay, we can start to install these two FATE cluster via KubeFATE with the following command:
+```
+kubefate@machine:~/kubefate$ kubefate cluster install -f examples/party-9999/cluster-spark-pulsar.yaml
+create job success, job id=2c1d926c-bb57-43d3-9127-8cf3fc6deb4b
+kubefate@machine:~/kubefate$ kubefate cluster install -f examples/party-10000/cluster-spark-pulsar.yaml
+create job success, job id=7752db70-e368-41fa-8827-d39411728d1b
 ```
 
-We change the following things:
-1. Change name to fate-10000;
-2. Namespace use fate-10000;
-3. partId use 10000;
-4. Remove exchange part;
-5. nodePort of proxy part, set to 30010, which can be connected by proxy 9999;
-6. Change the partyList according to proxy setting in party 9999;
-7. Change the count of egg setting from 3 to 1.
+There are two jobs created for deploying the FATE clusters. we can check the status of them with `kubefate job ls`,
+or watch the clusters till their STATUS changing to `Running`:
+```
+kubefate@machine:~/kubefate$ watch kubefate cluster ls
+UUID                                    NAME            NAMESPACE       REVISION        STATUS  CHART   ChartVERSION    AGE
+29878fa9-aeee-4ae5-a5b7-fd4e9eb7c1c3    fate-9999       fate-9999       1               Running fate    v2.0.0          88s
+dacc0549-b9fc-463f-837a-4e7316db2537    fate-10000      fate-10000      1               Running fate    v2.0.0          69s
+```
+We have about 10G Docker images that need to be pulled, this step will take a while for the first time.
+An alternative way is offline loading the images to the local environment.
 
-Okay, we can start to install these two FATE cluster via KubeFATE with following command,
+To check the status of the loading, use the command,
+```
+kubectl get po -n fate-9999
+kubectl get po -n fate-10000
 ```
 
-layne@machine:~/demo$ kubefate cluster install -f ./fate-9999.yaml
-create job success, job id=a3dd184f-084f-4d98-9841-29927bdbf627
-layne@machine:~/demo$ kubefate cluster install -f ./fate-10000.yaml
-create job success, job id=370ed79f-637e-482c-bc6a-7bf042b64e67
+When finished applying the image, the result will be similar to this,
+```
+NAME                           READY   STATUS    RESTARTS   AGE
+client-0                       1/1     Running   0          53m
+datanode-0                     1/1     Running   0          53m
+datanode-1                     1/1     Running   0          40m
+datanode-2                     1/1     Running   0          40m
+mysql-0                        1/1     Running   0          53m
+namenode-0                     1/1     Running   0          53m
+nginx-75b7565846-kpj86         1/1     Running   5          53m
+pulsar-0                       1/1     Running   1          53m
+python-0                       2/2     Running   0          53m
+spark-master-fc67d9b57-99sjx   1/1     Running   1          53m
+spark-worker-f74f94fdb-44248   1/1     Running   1          53m
+spark-worker-f74f94fdb-bx2jv   1/1     Running   1          53m
 ```
 
-There are two jobs created for deploying the FATE clusters, we can list all job and if saw the to jobs status changed to `Success`, the FATE have been deployed.
+### Verify the deployment
+From above `kubefate cluster ls` command, we know the cluster UUID of `fate-9999` is 
+`29878fa9-aeee-4ae5-a5b7-fd4e9eb7c1c3`, while cluster UUID of `fate-10000` is `dacc0549-b9fc-463f-837a-4e7316db2537`.
+Thus, we can query there access information by:
 ```
+kubefate@machine:~/demo$ kubefate cluster describe 29878fa9-aeee-4ae5-a5b7-fd4e9eb7c1c3
+UUID        	29878fa9-aeee-4ae5-a5b7-fd4e9eb7c1c3
+Name        	fate-9999
+NameSpace   	fate-9999
+ChartName   	fate
+ChartVersion	v2.0.0
+Revision    	1
+Age         	54m
+Status      	Running
+Spec        	algorithm: Basic
+            	chartName: fate
+            	chartVersion: v2.0.0
+            	computing: Spark
+            	device: CPU
+            	federation: Pulsar
+            	imagePullSecrets:
+            	- name: myregistrykey
+            	ingress:
+            	  client:
+            	    hosts:
+            	    - name: party9999.notebook.example.com
+            	  fateboard:
+            	    hosts:
+            	    - name: party9999.fateboard.example.com
+            	  pulsar:
+            	    hosts:
+            	    - name: party9999.pulsar.example.com
+            	  spark:
+            	    hosts:
+            	    - name: party9999.spark.example.com
+            	ingressClassName: nginx
+            	istio:
+            	  enabled: false
+            	modules:
+            	- python
+            	- mysql
+            	- fateboard
+            	- client
+            	- spark
+            	- hdfs
+            	- nginx
+            	- pulsar
+            	name: fate-9999
+            	namespace: fate-9999
+            	nginx:
+            	  grpcNodePort: 30098
+            	  httpNodePort: 30093
+            	  route_table:
+            	    "10000":
+            	      fateflow:
+            	      - grpc_port: 30108
+            	        host: 192.168.100.123
+            	        http_port: 30103
+            	  type: NodePort
+            	partyId: 9999
+            	persistence: false
+            	podSecurityPolicy:
+            	  enabled: false
+            	pullPolicy: null
+            	pulsar:
+            	  httpNodePort: 30094
+            	  httpsNodePort: 30099
+            	  publicLB:
+            	    enabled: false
+            	  route_table:
+            	    "9999":
+            	      host: pulsar
+            	      port: 6650
+            	      sslPort: 6651
+            	    "10000":
+            	      host: 192.168.100.123
+            	      port: 30104
+            	      proxy: ""
+            	      sslPort: 30109
+            	  type: NodePort
+            	python:
+            	  grpcNodePort: 30092
+            	  httpNodePort: 30097
+            	  logLevel: INFO
+            	  type: NodePort
+            	registry: ""
+            	servingIp: 192.168.100.123
+            	servingPort: 30095
+            	storage: HDFS
 
-layne@machine:~/demo$ kubefate job ls
-UUID                                    CREATOR METHOD          STATUS  STARTTIME               CLUSTERID
-a3dd184f-084f-4d98-9841-29927bdbf627    admin   ClusterInstall  Success 2020-03-10 12:26:39     2a15d783-67cd-4723-8a5c-50eb6355b6b0
-370ed79f-637e-482c-bc6a-7bf042b64e67    admin   ClusterInstall  Success 2020-03-10 12:27:06     16270e8a-20b1-43c7-9c6c-385977d8dfc8
+Info        	dashboard:
+            	- party9999.notebook.example.com
+            	- party9999.fateboard.example.com
+            	- party9999.pulsar.example.com
+            	- party9999.spark.example.com
+            	ip: 192.168.100.124
+            	status:
+            	  containers:
+            	    client: Running
+            	    datanode: Running
+            	    fateboard: Running
+            	    fateflow: Running
+            	    mysql: Running
+            	    namenode: Running
+            	    nginx: Running
+            	    pulsar: Running
+            	    spark-master: Running
+            	    spark-worker: Running
+            	  deployments:
+            	    nginx: Available
+            	    spark-master: Available
+            	    spark-worker: Available          
 ```
+In `Info->dashboard` field, we can see there are 4 dashboards in the current deployment: 
+* Notebook in `party9999.notebook.example.com`, which is the Jupyter Notebook integrated, 
+where data scientists can write python or access shell. We have pre-installed FATE-clients to the Notebook.
+* FATEBoard in `party9999.fateboard.example.com`, which we can use to check the status, job flows in FATE.
+* Pulsar in `party9999.pulsar.example.com`, which is the UI console of Pulsar, the message queue for transferring the gradients during FML.
+* Spark in `party9999.spark.example.com`, which is the UI console of Spark,
 
-## Verify the deployment
-### Run toy_example
-We use the [toy_example](https://github.com/FederatedAI/FATE/blob/master/examples/toy_example) in FATE/examples to quick verify the deployment. Let the party 10000 as the guest, while party 9999 as host, use cluster mode. The details of this example, please refer to [toy_example README](https://github.com/FederatedAI/FATE/blob/master/examples/toy_example/README.md).
+With similar command, we can check the dashboards for fate-10000.
 
-Firstly, find the python container of party 10000 with kubectl
-```
-layne@machine:~/demo$ kubectl get pod -n fate-10000|grep python*
-python-dc94c9786-8jsgh          2/2     Running   0          3m13s
-```
-The `python-dc94c9786-8jsgh` is the name of python pod <font color="red">(please replace it as your result)</font>, we enter its shell with command,
-```
-kubectl exec -it python-dc94c9786-8jsgh -n fate-10000 -- /bin/bash
-```
-then run the toy_example,
-```
-
-(venv) [root@python-dc94c9786-8jsgh python]# cd examples/toy_example/ && python run_toy_example.py 10000 9999 1
-stdout:{
-    "data": {
-        "board_url": "http://fateboard:8080/index.html#/dashboard?job_id=202003110905332206371&role=guest&party_id=10000",
-        "job_dsl_path": "/data/projects/fate/python/jobs/202003110905332206371/job_dsl.json",
-        "job_runtime_conf_path": "/data/projects/fate/python/jobs/202003110905332206371/job_runtime_conf.json",
-        "logs_directory": "/data/projects/fate/python/logs/202003110905332206371",
-        "model_info": {
-            "model_id": "guest-10000#host-9999#model",
-            "model_version": "202003110905332206371"
-        }
-    },
-    "jobId": "202003110905332206371",
-    "retcode": 0,
-    "retmsg": "success"
-}
-
-
-job status is running
-job status is running
-job status is running
-job status is running
-job status is running
-job status is running
-job status is running
-"2020-03-11 09:05:39,911 - secure_add_guest.py[line:101] - INFO: begin to init parameters of secure add example guest"
-"2020-03-11 09:05:39,911 - secure_add_guest.py[line:104] - INFO: begin to make guest data"
-"2020-03-11 09:05:42,576 - secure_add_guest.py[line:107] - INFO: split data into two random parts"
-"2020-03-11 09:05:51,661 - secure_add_guest.py[line:110] - INFO: share one random part data to host"
-"2020-03-11 09:05:52,444 - secure_add_guest.py[line:113] - INFO: get share of one random part data from host"
-"2020-03-11 09:05:57,566 - secure_add_guest.py[line:116] - INFO: begin to get sum of guest and host"
-"2020-03-11 09:05:58,571 - secure_add_guest.py[line:119] - INFO: receive host sum from guest"
-"2020-03-11 09:05:58,643 - secure_add_guest.py[line:126] - INFO: success to calculate secure_sum, it is 2000.0"
-(venv) [root@python-dc94c9786-8jsgh toy_example]#
-```
-We can find the success calculation result in return, which means these two parties FATE-Cluster have worked as expect. 
-
-### Check the FATE-Dashboard
-As the FATE-Dashboard is exposed as `http://${party_id}.fateboard.${serviceurl}` in KubeFATE deployments. In our case, should be:
-* Party 9999 FATE-Dashboard: http://9999.fateboard.kubefate.net/
-* Party 10000 FATE-Dashboard: http://10000.fateboard.kubefate.net/
+### (Optional) Configure the dashboards' URLs in hosts
+#### Note: if we have the dns service setup, this step can be skipped.
 
 If no DNS service configured, we have to add these two url to our hosts file. In a Linux or macOS machine, 
 
 ```
-sudo -- sh -c "echo \"192.168.100.123 9999.fateboard.kubefate.net\"  >> /etc/hosts"
-sudo -- sh -c "echo \"192.168.100.123 10000.fateboard.kubefate.net\"  >> /etc/hosts"
+sudo -- sh -c "echo \"192.168.100.123 party9999.notebook.example.com\"  >> /etc/hosts"
+sudo -- sh -c "echo \"192.168.100.123 party9999.fateboard.example.com\"  >> /etc/hosts"
+sudo -- sh -c "echo \"192.168.100.123 party10000.notebook.example.com\"  >> /etc/hosts"
+sudo -- sh -c "echo \"192.168.100.123 party10000.fateboard.example.com\"  >> /etc/hosts"
 ```
 
-In a Windows machine, you have to add them to `C:\WINDOWS\system32\drivers\etc\hosts`, please refer to related documents. After changing the hosts, we are able to open the browser see the jobs in each party: 
+In a Windows machine, you have to add them to `C:\WINDOWS\system32\drivers\etc\hosts`, please refer to
+[add host for Windows](https://github.com/ChrisChenSQ/KubeFATE/blob/master/docs/tutorials/Windows_add_host_tutorial.md).
 
-#### FATE-Dashboad 9999 as host,
+### Run a FATE example
+If everything go well, you can access 4 dashboards now via the browser,
 <div align="center">
-  <img src="./images/9999-dashboard.png" height = "500">
+  <img src="./images/fate-deploy-final.png" height = "500">
 </div>
 
-#### FATE-Dashboad 10000 as guest,
+Click `pipeline/pipeline_tutorial_upload.ipynb` to run the upload data job first, we need to do this for both the 
+client party (9999) and the host party (10000).
+
+Then click
+`pipeline/pipeline_tutorial_hetero_sbt.ipynb` on the client (9999)'s fateboard to run the training and predicting job.
+For more details, check the words in the notebook script.
+
+More notebook examples can be found here: https://github.com/FederatedAI/FATE/tree/master/doc/tutorial/pipeline
+
+A screenshot of the notebook is like: 
 <div align="center">
-  <img src="./images/10000-dashboard.png" height = "500">
+  <img src="./images/fate-9999-run.png" height = "800">
 </div>
+
+
+When the training job is done, we can check the workflow on fateboard. 
+<div align="center">
+  <img src="./images/fate-9999-workflow.png" height = "800">
+</div>
+
+The output of the evaluation component of the training job. 
+<div align="center">
+  <img src="./images/fate-9999-evaluation.png" height = "800">
+</div>
+
+When the predicting job is done, we can check the model outputs on fateboard.
+<div align="center">
+  <img src="./images/fate-9999-model-output.png" height = "800">
+</div>
+
+Also the data output.
+<div align="center">
+  <img src="./images/fate-9999-data-output.png" height = "800">
+</div>
+
+
+This means that the job is successfully processed and KubeFate is running properly.
+
+## Next Steps
+1. The example showed above is just one of FATE's examples. Please explore other Job examples in Notebook.
+2. Now you have deployed your first FATE cluster based on Spark and Pulsar. We also have prepared example YAML files 
+   (https://github.com/FederatedAI/KubeFATE/tree/master/k8s-deploy/examples) for:
+  * Deploy FATE-Serving
+  * Deploy Eggroll based FATE cluster.
+  * Try Rabbitmq as the message queue.
+  * Deploy Spark-local+LocalFS based FATE cluster.
+  * Deploy FATE-Exchange to deploy the star-mode federation.

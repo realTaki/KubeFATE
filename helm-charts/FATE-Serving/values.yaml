@@ -1,0 +1,118 @@
+partyId: 9999
+partyName: fate-serving-9999
+
+# containers images 
+image:
+  registry: federatedai
+  isThridParty:
+  tag: 2.1.6-release
+  pullPolicy: IfNotPresent
+  imagePullSecrets: 
+#  - name: 
+persistence:
+  enabled: false
+  
+istio:
+  enabled: false
+
+podSecurityPolicy:
+  enabled: false
+
+ingressClassName: nginx
+
+ingress:
+  servingProxy: 
+    # annotations: 
+    hosts:
+    - name: serving-proxy.example.com
+      path: /
+  # tls:
+      # - secretName: my-tls-secret
+        # hosts:
+          # - serving-proxy.example.com
+  servingAdmin: 
+    # annotations: 
+    hosts:
+    - name: serving-admin.example.com
+      path: /
+  # tls:
+     # - secretName: my-tls-secret
+       # hosts:
+         # - serving-admin.example.com
+
+servingProxy: 
+  include: true
+  ip: serving-proxy
+  port: 6379
+  type: NodePort
+  nodePort: 30109
+  loadBalancerIP:  
+  nodeSelector:
+  tolerations:
+  affinity:
+  exchange:
+    partyIp: 192.168.0.1
+    partyPort: 30100
+  partyList:
+  # - partyId: 10000
+    # partyIp: 192.168.10.1
+    # partyPort: 30110
+
+servingServer:
+  include: true
+  type: NodePort
+  nodePort: 30209
+  httpNodePort: 30210
+  loadBalancerIP:  
+  fateflow:
+    ip: fateflow
+    port: 9380
+  nodeSelector:
+  tolerations:
+  affinity:
+  cacheSwitch: false
+  cacheType: redis
+  singleAdaptor: com.webank.ai.fate.serving.adaptor.dataaccess.MockAdapter
+  batchAdaptor: com.webank.ai.fate.serving.adaptor.dataaccess.MockBatchAdapter
+  AdapterURL: http://127.0.0.1:9380/v1/http/adapter/getFeature
+  subPath: ""
+  existingClaim: ""
+  storageClass: "serving-server"
+  accessMode: ReadWriteOnce
+  size: 1Gi
+
+servingZookeeper:
+  include: true
+  nodeSelector: 
+  tolerations:
+  affinity:
+  subPath: ""
+  existingClaim: ""
+  storageClass: "serving-zookeeper"
+  accessMode: ReadWriteOnce
+  size: 1Gi
+
+servingAdmin:
+  include: true
+  username: admin
+  password: admin
+  nodeSelector: 
+  tolerations:
+  affinity:
+
+servingRedis:
+  include: true
+  password: fate_dev
+  subPath: ""
+  existingClaim: ""
+  storageClass: "serving-redis"
+  accessMode: ReadWriteOnce
+  size: 1Gi
+  nodeSelector:
+  tolerations:
+  affinity:
+
+
+# externalRedisIp: "redis"
+# externalRedisPort: 6379
+# externalRedisPassword: "fate_dev"

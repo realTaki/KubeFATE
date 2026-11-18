@@ -1,34 +1,97 @@
+/*
+ * Copyright 2019-2021 VMware, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
 package api
 
 import (
-	"fmt"
-	"github.com/FederatedAI/KubeFATE/k8s-deploy/pkg/db"
-	"github.com/FederatedAI/KubeFATE/k8s-deploy/pkg/service"
+	"errors"
+
+	"github.com/FederatedAI/KubeFATE/k8s-deploy/pkg/modules"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 	"helm.sh/helm/v3/pkg/chart/loader"
-	"os"
-	"path/filepath"
 )
 
+// Chart API struct
 type Chart struct {
 }
 
-// Router is cluster router definition method
+// Router is Chart router definition method
 func (c *Chart) Router(r *gin.RouterGroup) {
 
 	authMiddleware, _ := GetAuthMiddleware()
-	cluster := r.Group("/chart")
-	cluster.Use(authMiddleware.MiddlewareFunc())
+	chart := r.Group("/chart")
+	chart.Use(authMiddleware.MiddlewareFunc())
 	{
-		cluster.POST("", c.createChart)
-		cluster.GET("/", c.getChartList)
-		cluster.GET("/:chartId", c.getChart)
-		cluster.DELETE("/:chartId", c.deleteChart)
+		chart.POST("", c.createChart)
+		chart.GET("/", c.getChartList)
+		chart.GET("/:chartId", c.getChart)
+		chart.DELETE("/:chartId", c.deleteChart)
+		chart.GET("/valueTemplateExample/:chartName/:chartVersion", c.getValueTemplateExample)
 	}
 }
 
-func (_ *Chart) createChart(c *gin.Context) {
+// HelmUUID HelmUUID
+type HelmUUID struct {
+	HelmUUID string
+}
+
+// getValueTemplateExample return valueTemplateExample string by chart name and version
+// @Summary return valueTemplateExample string by chart name and version
+// @Tags Chart
+// @Produce  json
+// @Param  chartName path string true "chart name"
+// @Param  chartVersion path string true "chart version"
+// @Success 200 {object} JSONResult{data=string} "Success"
+// @Failure 401 {object} JSONERRORResult "Unauthorized operation"
+// @Failure 500 {object} JSONERRORResult "Internal server error"
+// @Router /valueTemplateExample/{chartName}/{chartVersion} [get]
+// @Param Authorization header string true "Authentication header" default(Bearer <Token>)
+// @Security ApiKeyAuth
+func (*Chart) getValueTemplateExample(c *gin.Context) {
+	name, version := c.Param("chartName"), c.Param("chartVersion")
+	if name == "" || version == "" {
+		err := errors.New("name or version is empty")
+		log.Error().Err(err).Msg("request params error")
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	helmChart, err := modules.GetFateChart(name, version)
+	if err != nil {
+		log.Error().Err(err).Msg("GetFateChart error")
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	v := helmChart.ValuesTemplateExample
+	log.Debug().Interface("ValuesTemplateExample", v).Msg("getValueTemplateExample Success")
+	c.JSON(200, gin.H{"msg": "getChartByNameVersion Success", "data": v})
+}
+
+// createChart Upload a Chart
+// @Summary Upload a Chart
+// @Tags Chart
+// @Produce  json
+// @Param file formData file true "Cluster Chart"
+// @Success 200 {object} JSONResult{data=HelmUUID} "Success"
+// @Failure 400 {object} JSONERRORResult "Bad Request"
+// @Failure 401 {object} JSONERRORResult "Unauthorized operation"
+// @Failure 500 {object} JSONERRORResult "Internal server error"
+// @Router /chart [post]
+// @Param Authorization header string true "Authentication header" default(Bearer <Token>)
+// @Security ApiKeyAuth
+func (*Chart) createChart(c *gin.Context) {
 	// single file
 	file, err := c.FormFile("file")
 	if err != nil {
@@ -39,90 +102,117 @@ func (_ *Chart) createChart(c *gin.Context) {
 
 	log.Debug().Str("Filename", file.Filename).Msg("upload file")
 
-	//path := "/data/projects/fatecloud/"
-	path, _ := filepath.Abs(".")
-	log.Debug().Str("path", path).Msg("path")
-
-	fileName := filepath.Join(path, file.Filename)
-
-	log.Debug().Str("fileName", fileName).Msg("fileName")
-
-	// Upload the file to specific dst.
-	err = c.SaveUploadedFile(file, fileName)
-	// delete file
-	defer os.Remove(fileName)
+	f, err := file.Open()
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		log.Error().Err(err).Msg("request error")
+		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
-	// Check chart dependencies to make sure all are present in /charts
-	chartRequested, err := loader.Load(fileName)
+
+	chartRequested, err := loader.LoadArchive(f)
 	if err != nil {
+		log.Error().Err(err).Msg("LoadArchive error")
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 
-	helmChart, err := service.ChartRequestedTohelmChart(chartRequested)
+	hc := modules.HelmChart{}
+	helmChart, err := hc.ChartRequestedToHelmChart(chartRequested)
 	if err != nil {
+		log.Error().Err(err).Msg("request error")
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 
-	//helmUUID, err := db.Save(helmChart)
-	//if err != nil {
-	//	c.JSON(500, gin.H{"error": err.Error()})
-	//	return
-	//}
-
-	helmUUID, err := db.ChartSave(helmChart)
+	err = helmChart.Upload()
 	if err != nil {
+		log.Error().Err(err).Msg("request error")
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(200, gin.H{"msg": "createChart success", "data": gin.H{"helmUUID": helmUUID}})
+	log.Debug().Interface("helmChart.Chart", helmChart.Chart).Msg("createChart Success")
+	c.JSON(200, gin.H{"msg": "CreateChart Success", "data": gin.H{"helmUUID": helmChart.Uuid}})
 }
 
-func (_ *Chart) getChartList(c *gin.Context) {
+// getChartList List all historical Charts
+// @Summary List all historical Charts
+// @Tags Chart
+// @Produce  json
+// @Success 200 {object} JSONResult{data=[]modules.HelmChart} "Success"
+// @Failure 401 {object} JSONERRORResult "Unauthorized operation"
+// @Failure 500 {object} JSONERRORResult "Internal server error"
+// @Router /chart [get]
+// @Param Authorization header string true "Authentication header" default(Bearer <Token>)
+// @Security ApiKeyAuth
+func (*Chart) getChartList(c *gin.Context) {
 
-	chartList, err := db.FindHelmChartList()
+	chartList, err := new(modules.HelmChart).GetList()
 	if err != nil {
+		log.Error().Err(err).Msg("request error")
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(200, gin.H{"msg": "getChartList success", "data": chartList})
+	log.Debug().Interface("chartList", chartList).Msg("getChartList Success")
+	c.JSON(200, gin.H{"msg": "getChartList Success", "data": chartList})
 }
 
-func (_ *Chart) getChart(c *gin.Context) {
+// getChart Get Chart by chartId
+// @Summary Get Chart by chartId
+// @Tags Chart
+// @Produce  json
+// @Param  chartId path string true "Chart Id"
+// @Success 200 {object} JSONResult{data=modules.HelmChart} "Success"
+// @Failure 400 {object} JSONERRORResult "Bad Request"
+// @Failure 401 {object} JSONERRORResult "Unauthorized operation"
+// @Failure 500 {object} JSONERRORResult "Internal server error"
+// @Router /chart/{chartId} [get]
+// @Param Authorization header string true "Authentication header" default(Bearer <Token>)
+// @Security ApiKeyAuth
+func (*Chart) getChart(c *gin.Context) {
 
-	chartId := c.Param("chartId")
-	if chartId == "" {
+	chartID := c.Param("chartId")
+	if chartID == "" {
+		log.Error().Err(errors.New("not exit chartId")).Msg("request error")
 		c.JSON(400, gin.H{"error": "not exit chartId"})
 		return
 	}
 
-	chartList, err := db.FindHelmChart(chartId)
+	hc := modules.HelmChart{Uuid: chartID}
+	chartList, err := hc.Get()
 	if err != nil {
+		log.Error().Err(err).Msg("request error")
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(200, gin.H{"msg": "getChart success", "data": chartList})
+	log.Debug().Interface("chartList", chartList).Msg("getChart Success")
+	c.JSON(200, gin.H{"msg": "getChart Success", "data": chartList})
 }
 
-func (_ *Chart) deleteChart(c *gin.Context) {
-	chartId := c.Param("chartId")
-	if chartId == "" {
+// deleteChart Delete Chart by chartId
+// @Summary Delete Chart by chartId
+// @Tags Chart
+// @Produce  json
+// @Param  chartId path string true "chart Id"
+// @Success 200 {object} JSONEMSGResult "Success"
+// @Failure 400 {object} JSONERRORResult "Bad Request"
+// @Failure 401 {object} JSONEMSGResult "Unauthorized operation"
+// @Failure 500 {object} JSONERRORResult "Internal server error"
+// @Router /chart/{chartId} [delete]
+// @Param Authorization header string true "Authentication header" default(Bearer <Token>)
+// @Security ApiKeyAuth
+func (*Chart) deleteChart(c *gin.Context) {
+	chartID := c.Param("chartId")
+	if chartID == "" {
 		c.JSON(400, gin.H{"error": "not exit chartId"})
 		return
 	}
-	chart := new(db.HelmChart)
-	n, err := db.DeleteByUUID(chart, chartId)
+	chart := new(modules.HelmChart)
+	_, err := chart.DeleteByUuid(chartID)
 	if err != nil {
+		log.Error().Err(err).Msg("request error")
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	if n != 1 {
-		c.JSON(200, gin.H{"msg": "deleteChart error, DeletedCount=" + fmt.Sprintf("%d", n)})
-		return
-	}
-	c.JSON(200, gin.H{"msg": "deleteChart success"})
+	log.Debug().Interface("result", "deleteChart Success").Msg("deleteChart Success")
+	c.JSON(200, gin.H{"msg": "deleteChart Success"})
 }

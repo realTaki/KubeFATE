@@ -1,12 +1,27 @@
+/*
+ * Copyright 2019-2021 VMware, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 package cli
 
 import (
 	"errors"
 	"fmt"
-	"github.com/FederatedAI/KubeFATE/k8s-deploy/pkg/db"
+	"os"
+
+	"github.com/FederatedAI/KubeFATE/k8s-deploy/pkg/modules"
 	"github.com/gosuri/uitable"
 	"helm.sh/helm/v3/pkg/cli/output"
-	"os"
 )
 
 type Chart struct {
@@ -20,12 +35,12 @@ func (c *Chart) addArgs() (Args string) {
 }
 
 type ChartResultList struct {
-	Data []*db.HelmChart
+	Data []*modules.HelmChart
 	Msg  string
 }
 
 type ChartResult struct {
-	Data *db.HelmChart
+	Data *modules.HelmChart
 	Msg  string
 }
 
@@ -35,6 +50,11 @@ type ChartResultMsg struct {
 
 type ChartResultErr struct {
 	Error string
+}
+
+type ValueResult struct {
+	Data string
+	Msg  string
 }
 
 func (c *Chart) getResult(Type int) (result interface{}, err error) {
@@ -47,13 +67,15 @@ func (c *Chart) getResult(Type int) (result interface{}, err error) {
 		result = new(ChartResultMsg)
 	case ERROR:
 		result = new(ChartResultErr)
+	case VALUE:
+		result = new(ValueResult)
 	default:
 		err = fmt.Errorf("no type %d", Type)
 	}
 	return
 }
 
-func (c *Chart) outPut(result interface{}, Type int) error {
+func (c *Chart) output(result interface{}, Type int) error {
 	switch Type {
 	case LIST:
 		return c.outPutList(result)
@@ -64,7 +86,7 @@ func (c *Chart) outPut(result interface{}, Type int) error {
 	case ERROR:
 		return c.outPutErr(result)
 	default:
-		return fmt.Errorf("outPut error: no type %d", Type)
+		return fmt.Errorf("output error: no type %d", Type)
 	}
 }
 

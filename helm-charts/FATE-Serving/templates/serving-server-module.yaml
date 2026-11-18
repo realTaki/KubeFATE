@@ -1,0 +1,207 @@
+# Copyright 2019-2021 VMware, Inc.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+{{ if .Values.servingServer.include }}
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: serving-server-config
+  labels:
+    fateMoudle: serving-server
+    name: {{ .Values.partyName | quote  }}
+    partyId: {{ .Values.partyId | quote  }}
+    owner: kubefate
+    cluster: fate-serving
+data:
+  serving-server.properties: |
+    party.id={{ .Values.partyId }}
+    port=8000
+    #serviceRoleName=serving
+    # cache
+    remoteModelInferenceResultCacheSwitch={{ .Values.servingServer.cacheSwitch | default "false" }}
+    cache.type={{ .Values.servingServer.cacheType | default "local" }}
+    model.cache.path=/data/projects/fate-serving/serving-server
+    # local cache
+    #local.cache.maxsize=10000
+    #local.cache.expire=30
+    #local.cache.interval=3
+    # external cache
+    
+    redis.ip={{ .Values.externalRedisIp | default "serving-redis" }}
+    redis.port={{ .Values.externalRedisPort | default "6379" }}
+    ### configure this parameter to use cluster mode
+    #redis.cluster.nodes=127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381,127.0.0.1:6382,127.0.0.1:6383,127.0.0.1:6384
+    ### this password is common in stand-alone mode and cluster mode
+    redis.password={{ .Values.externalRedisPassword | default .Values.servingRedis.password | default "fate_dev" }}
+    
+    #redis.timeout=10
+    #redis.expire=3000
+    #redis.maxTotal=100
+    #redis.maxIdle=100
+
+    proxy={{ .Values.servingProxy.ip }}:8879
+    # adapter
+    feature.single.adaptor={{ .Values.servingServer.singleAdaptor | default "com.webank.ai.fate.serving.adaptor.dataaccess.MockAdapter" }}
+    feature.batch.adaptor={{ .Values.servingServer.batchAdaptor | default "com.webank.ai.fate.serving.adaptor.dataaccess.MockBatchAdapter" }}
+    http.adapter.url={{ .Values.servingServer.AdapterURL | default "http://127.0.0.1:9380/v1/http/adapter/getFeature" }}
+    # model transfer
+    model.transfer.url=http://{{ .Values.servingServer.fateflow.ip }}:{{ .Values.servingServer.fateflow.port }}/v1/model/transfer
+    # zk router
+    zk.url=serving-zookeeper:2181
+    useRegister=true
+    useZkRouter=true
+    # zk acl
+    #acl.enable=false
+    #acl.username=
+    #acl.password=
+
+    # LR algorithm config
+    #lr.split.size=500
+    #lr.use.parallel=false
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: serving-server
+  labels:
+    fateMoudle: serving-server
+    name: {{ .Values.partyName | quote  }}
+    partyId: {{ .Values.partyId | quote  }}
+    owner: kubefate
+    cluster: fate-serving
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      fateMoudle: serving-server
+      name: {{ .Values.partyName | quote  }}
+      partyId: {{ .Values.partyId | quote  }}
+  template:
+    metadata:
+      labels:
+        fateMoudle: serving-server
+        name: {{ .Values.partyName | quote  }}
+        partyId: {{ .Values.partyId | quote  }}
+        owner: kubefate
+        cluster: fate-serving
+    spec:
+      containers:
+        - image: {{ .Values.image.registry }}/serving-server:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          name: serving-server
+          ports:
+            - containerPort: 9394
+          volumeMounts:
+            - mountPath: /data/projects/fate-serving/serving-server/conf/serving-server.properties
+              name: serving-server-confs
+              subPath: serving-server.properties
+            - name: data
+              mountPath: /root/.fate
+              subPath: cache
+            - name: data
+              mountPath: /data/projects/fate-serving/serving-server/.fate
+              subPath: model_cache
+      {{- with .Values.servingServer.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+      {{- end }}
+
+      {{- with .Values.servingServer.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+      {{- end }}
+      {{- with .Values.servingServer.affinity }}
+      affinity:
+{{ toYaml . | indent 8 }}
+      {{- end }}
+      {{- with .Values.image.imagePullSecrets }}
+      imagePullSecrets:
+{{ toYaml . | indent 6 }}
+      {{- end }}
+      serviceAccountName:  {{ template "serviceAccountName" . }}
+      restartPolicy: Always
+      volumes:
+        - name: serving-server-confs
+          configMap:
+            name: serving-server-config
+        {{- if not .Values.persistence.enabled }}
+        - name: data
+          emptyDir: {}
+        {{- else }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ .Values.servingServer.existingClaim | default  "serving-server-data" }}
+        {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    fateMoudle: serving-server
+    name: {{ .Values.partyName | quote  }}
+    partyId: {{ .Values.partyId | quote  }}
+    owner: kubefate
+    cluster: fate-serving
+  name: serving-server
+spec:
+  ports:
+    - name: "8000"
+      port: 8000
+      targetPort: 8000
+      {{- if eq .Values.servingServer.type "NodePort" "LoadBalancer" }}
+      nodePort: {{ .Values.servingServer.nodePort }}
+      {{- end }}
+      protocol: TCP
+    - name: "8080"
+      port: 8080
+      targetPort: 8080
+      {{- if eq .Values.servingServer.type "NodePort" "LoadBalancer" }}
+      nodePort: {{ .Values.servingServer.httpNodePort }}
+      {{- end }}
+      protocol: TCP
+  type: {{ .Values.servingServer.type }}
+  {{- if .Values.servingServer.loadBalancerIP }}
+  loadBalancerIP: "{{ .Values.servingServer.loadBalancerIP }}"
+  {{- end }}
+  selector:
+    fateMoudle: serving-server
+    name: {{ .Values.partyName | quote  }}
+    partyId: {{ .Values.partyId | quote  }}
+---
+{{- if and .Values.persistence.enabled (not .Values.servingServer.existingClaim) }}
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: serving-server-data
+  labels:
+    fateMoudle: serving-server
+    name: {{ .Values.partyName | quote  }}
+    partyId: {{ .Values.partyId | quote  }}
+    owner: kubefate
+    cluster: fate-serving
+spec:
+  accessModes: 
+    - {{ .Values.servingServer.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.servingServer.size }}
+  {{- if .Values.servingServer.storageClass }}
+    {{- if eq "-" .Values.servingServer.storageClass }}
+  storageClassName: ""
+    {{- else }}
+  storageClassName: {{ .Values.servingServer.storageClass }}
+    {{- end }}
+  {{- end }}
+{{- end }}
+{{ end }}

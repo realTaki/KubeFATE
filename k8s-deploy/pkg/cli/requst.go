@@ -1,3 +1,17 @@
+/*
+ * Copyright 2019-2021 VMware, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 package cli
 
 import (
@@ -5,19 +19,24 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/FederatedAI/KubeFATE/k8s-deploy/pkg/api"
-	"github.com/FederatedAI/KubeFATE/k8s-deploy/pkg/db"
-	"github.com/rs/zerolog/log"
-	"github.com/spf13/viper"
 	"io/ioutil"
 	"net/http"
+
+	"github.com/FederatedAI/KubeFATE/k8s-deploy/pkg/api"
+	"github.com/FederatedAI/KubeFATE/k8s-deploy/pkg/modules"
+	"github.com/rs/zerolog/log"
+	"github.com/spf13/viper"
 )
 
 func getToken() (string, error) {
 
 	serviceurl := viper.GetString("serviceurl")
-
-	loginUrl := "http://" + serviceurl + "/v1/user/login"
+	safeconnect := viper.GetString("safeconnect")
+	scheme := "http://"
+	if safeconnect == "true" {
+		scheme = "https://"
+	}
+	loginUrl := scheme + serviceurl + "/v1/user/login"
 
 	login := map[string]string{
 		"username": viper.GetString("user.username"),
@@ -33,19 +52,28 @@ func getToken() (string, error) {
 	}
 
 	var resp *http.Response
+	Request.Header.Add("user-agent", "kubefate")
 	resp, err = http.DefaultClient.Do(Request)
 	if err != nil {
 		return "", err
 	}
 
-	rbody, err := ioutil.ReadAll(resp.Body)
+	rBody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
 
+	if resp.StatusCode == 503 {
+		return "", fmt.Errorf("%d Service Temporarily Unavailable. Please try again later or check the pod status of kubefate", resp.StatusCode)
+	}
+
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("resp.StatusCode=%d, error: %s", resp.StatusCode, rBody)
+	}
+
 	Result := map[string]interface{}{}
 
-	err = json.Unmarshal(rbody, &Result)
+	err = json.Unmarshal(rBody, &Result)
 	if err != nil {
 		return "", err
 	}
@@ -56,7 +84,7 @@ func getToken() (string, error) {
 
 	token := fmt.Sprint(Result["token"])
 
-	log.Debug().Str("token", token).Msg("get token success")
+	log.Debug().Str("token", token).Msg("get token Success")
 	return token, nil
 }
 
@@ -73,11 +101,16 @@ type Response struct {
 
 func Send(r *Request) (*Response, error) {
 	serviceUrl := viper.GetString("serviceurl")
-	apiVersion := api.ApiVersion + "/"
+	apiVersion := api.APIVersion + "/"
 	if serviceUrl == "" {
 		serviceUrl = "localhost:8080/"
 	}
-	Url := "http://" + serviceUrl + "/" + apiVersion + r.Path
+	safeconnect := viper.GetString("safeconnect")
+	scheme := "http://"
+	if safeconnect == "true" {
+		scheme = "https://"
+	}
+	Url := scheme + serviceUrl + "/" + apiVersion + r.Path
 	body := bytes.NewReader(r.Body)
 	log.Debug().Str("Type", r.Type).Str("url", Url).Str("Body", string(r.Body)).Msg("Request")
 	request, err := http.NewRequest(r.Type, Url, body)
@@ -91,7 +124,7 @@ func Send(r *Request) (*Response, error) {
 	Authorization := fmt.Sprintf("Bearer %s", token)
 
 	request.Header.Add("Authorization", Authorization)
-
+	request.Header.Add("user-agent", "kubefate")
 	resp, err := http.DefaultClient.Do(request)
 	if err != nil {
 		return nil, err
@@ -109,7 +142,7 @@ func Send(r *Request) (*Response, error) {
 }
 
 type Result struct {
-	Data []*db.Job
+	Data []*modules.Job
 	Msg  string
 }
 

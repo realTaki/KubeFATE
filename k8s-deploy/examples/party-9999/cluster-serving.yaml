@@ -1,0 +1,56 @@
+name: fate-serving-9999
+namespace: fate-serving-9999
+chartName: fate-serving
+chartVersion: v2.1.6
+partyId: 9999
+registry: ""
+pullPolicy:
+imagePullSecrets: 
+- name: myregistrykey
+persistence: false
+istio:
+  enabled: false
+podSecurityPolicy:
+  enabled: false
+ingressClassName: nginx
+modules:
+  - servingProxy
+  - servingRedis
+  - servingServer
+  - servingZookeeper
+  - servingAdmin
+  
+ingress:
+  servingProxy: 
+    hosts:
+    - name: party9999.serving-proxy.example.com
+      path: /
+  servingAdmin: 
+    hosts:
+    - name: party9999.serving-admin.example.com
+      path: /
+      
+servingAdmin:
+  username: admin
+  password: admin
+
+servingProxy: 
+  nodePort: 30096
+  type: NodePort
+  partyList:
+  - partyId: 10000
+    partyIp: 192.168.10.1
+    partyPort: 30106
+
+servingServer:
+  type: NodePort
+  nodePort: 30095
+  fateflow:
+    ip: 192.168.9.1
+    port: 30097
+  cacheSwitch: true
+  cacheType: "redis"
+  singleAdaptor: com.webank.ai.fate.serving.adaptor.dataaccess.MockAdapter
+  batchAdaptor: com.webank.ai.fate.serving.adaptor.dataaccess.MockBatchAdapter
+  AdapterURL: http://127.0.0.1:9380/v1/http/adapter/getFeature
+  

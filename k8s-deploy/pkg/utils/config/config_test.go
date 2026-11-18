@@ -1,44 +1,59 @@
+/*
+ * Copyright 2019-2021 VMware, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 package config
 
 import (
-	"os"
+	"fmt"
+	"reflect"
 	"testing"
-	"time"
 
 	"github.com/spf13/viper"
+	"gopkg.in/yaml.v2"
 )
 
-func TestConfig_DirExists(t *testing.T) {
-	tmpDir := os.TempDir()
-	exists := DirExists(tmpDir)
-	if exists != true {
-		t.Errorf("%s exists but DirExists return false \n", tmpDir)
+func TestInitViper(t *testing.T) {
+	InitViper()
+
+	defaultConfig := []byte(`db:
+  file: file::memory:?cache=shared
+  type: sqlite
+log:
+  level: info
+  nocolor: "false"
+repo:
+  name: kubefate
+  url: https://federatedai.github.io/KubeFATE
+server:
+  address: 0.0.0.0
+  port: "8080"
+serviceurl: localhost:8080
+user:
+  password: admin
+  username: admin
+`)
+	want := defaultConfig
+
+	config := viper.AllSettings()
+	got, err := yaml.Marshal(config)
+	if (err != nil) != false {
+		t.Errorf("GetPodList() error = %v, wantErr %v", err, false)
+		return
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("AllKeys() = \n%v \nwant \n%v", got, want)
 	}
 
-	// construct a random dir path
-	tmpDir = time.Now().Format(time.RFC3339Nano)
-	exists = DirExists(tmpDir)
-	if exists != false {
-		t.Errorf("%s does not exist but DirExists return true \n", tmpDir)
-	}
-}
-
-func TestConfig_InitViper(t *testing.T) {
-	_ = InitViper()
-
-	viper.AddConfigPath("../../../")
-
-	err := viper.ReadInConfig()
-	if err != nil {
-		t.Errorf("Fatal error config file: %s \n", err)
-	}
-
-	result := viper.Get("mongo")
-	if result == "" {
-		t.Errorf("Can not read mongo")
-	}
-
-	t.Log(result)
-	result = viper.Get("mongo.url")
-	t.Log(result)
+	fmt.Println(viper.GetString("db.type"))
 }

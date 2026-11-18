@@ -1,51 +1,109 @@
 name: fate-serving-9999
 namespace: fate-serving-9999
 chartName: fate-serving
-chartVersion: v1.2.2-a
+chartVersion: v2.1.6
 partyId: 9999
 registry: ""
-pullPolicy: 
+pullPolicy:
+imagePullSecrets: 
+- name: myregistrykey
 persistence: false
+istio:
+  enabled: false
+podSecurityPolicy:
+  enabled: false
 modules:
   - servingProxy
   - servingRedis
   - servingServer
+  - servingZookeeper
+  - servingAdmin
 
-servingProxy: 
-  nodePort: 30309
-  ingerssHost: 9999.serving-proxy.kubefate.net
-  partyList:
-  - partyId: 10000
-    partyIp: 192.168.10.1
-    partyPort: 30310
-  exchange:
-    ip: 192.168.1.1
-    port: 30100
-  nodeSelector: {}
+# ingress:
+  # servingProxy: 
+    # # annotations: 
+    # hosts:
+    # - name: party9999.serving-proxy.example.com
+      # path: /
+  # # tls:
+    # # - secretName: my-tls-secret
+      # # hosts:
+        # # - party9999.serving-proxy.example.com
+  # servingAdmin: 
+    # # annotations: 
+    # hosts:
+    # - name: party9999.serving-admin.example.com
+      # path: /
+  # # tls:
+    # # - secretName: my-tls-secret
+      # # hosts:
+         # # - party9999.serving-admin.example.com
 
-servingServer:
-  type: NodePort
-  nodePort: 30209
-  fateflow:
-    ip: 192.168.9.1
-    port: 30109
-  subPath: ""
-  existingClaim: ""
-  storageClass: "serving-server"
-  accessMode: ReadWriteOnce
-  size: 1Gi
-  nodeSelector: {}
+# servingAdmin:
+  # nodeSelector:
+  # tolerations:
+  # affinity:
+  # username: admin
+  # password: admin
 
-servingRedis:
-  password: fate_dev
-  nodeSelector: {}
-  subPath: ""
-  existingClaim: ""
-  storageClass: "serving-redis"
-  accessMode: ReadWriteOnce
-  size: 1Gi
+# servingProxy: 
+  # nodePort: 30310
+  # type: NodePort
+  # loadBalancerIP: 
+  # nodeSelector:
+  # tolerations:
+  # affinity:
+  # partyList:
+  # # - partyId: 9999
+    # # partyIp: 192.168.9.1
+    # # partyPort: 30309
+  # exchange:
+    # ip: 192.168.1.1
+    # port: 30100
 
-# externalRedisIp: serving-redis
-# externalRedisPort: 6379
-# externalRedisDatabase: 0
-# externalRedisPassword: fate_dev
+# servingServer:
+  # type: NodePort
+  # nodePort: 30210
+  # loadBalancerIP: 
+  # nodeSelector:
+  # tolerations:
+  # affinity:
+  # fateflow:
+    # ip: 192.168.10.1
+    # port: 30110
+  # cacheSwitch: true
+  # cacheType: "redis"
+  # singleAdaptor: com.webank.ai.fate.serving.adaptor.dataaccess.MockAdapter
+  # batchAdaptor: com.webank.ai.fate.serving.adaptor.dataaccess.MockBatchAdapter
+  # AdapterURL: http://127.0.0.1:9380/v1/http/adapter/getFeature
+  # subPath: ""
+  # existingClaim: ""
+  # storageClass: "serving-server"
+  # accessMode: ReadWriteOnce
+  # size: 1Gi
+
+# servingRedis:
+  # password: fate_dev
+  # nodeSelector:
+  # tolerations:
+  # affinity:
+  # subPath: ""
+  # existingClaim: ""
+  # storageClass: "serving-redis"
+  # accessMode: ReadWriteOnce
+  # size: 1Gi
+
+# externalRedisIp: ""
+# externalRedisPort: ""
+# externalRedisPassword: ""
+
+
+# servingZookeeper:
+  # nodeSelector:
+  # tolerations:
+  # affinity:
+  # subPath: ""
+  # existingClaim: ""
+  # storageClass: "serving-zookeeper"
+  # accessMode: ReadWriteOnce
+  # size: 1Gi

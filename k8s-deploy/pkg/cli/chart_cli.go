@@ -1,18 +1,33 @@
+/*
+ * Copyright 2019-2021 VMware, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 package cli
 
 import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/FederatedAI/KubeFATE/k8s-deploy/pkg/api"
-	"github.com/rs/zerolog/log"
-	"github.com/spf13/viper"
-	"github.com/urfave/cli/v2"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
+
+	"github.com/FederatedAI/KubeFATE/k8s-deploy/pkg/api"
+	"github.com/rs/zerolog/log"
+	"github.com/spf13/viper"
+	"github.com/urfave/cli/v2"
 
 	"io/ioutil"
 )
@@ -27,7 +42,7 @@ func ChartCommand() *cli.Command {
 			ChartDeleteCommand(),
 			ChartCreateCommand(),
 		},
-		Usage: "List charts, create, delete and describe a chart",
+		Usage: "List Charts, create, delete and describe a Chart",
 	}
 }
 
@@ -36,10 +51,10 @@ func ChartListCommand() *cli.Command {
 		Name:    "list",
 		Aliases: []string{"ls"},
 		Flags:   []cli.Flag{},
-		Usage:   "List charts list",
+		Usage:   "List Charts list",
 		Action: func(c *cli.Context) error {
-			cluster := new(Chart)
-			return GetItemList(cluster)
+			chart := new(Chart)
+			return GetItemList(chart)
 		},
 	}
 }
@@ -48,7 +63,7 @@ func ChartInfoCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "describe",
 		Flags: []cli.Flag{},
-		Usage: "Describe a chart's detail info",
+		Usage: "Describe a Chart's detail info",
 		Action: func(c *cli.Context) error {
 			var uuid string
 			if c.Args().Len() > 0 {
@@ -56,8 +71,8 @@ func ChartInfoCommand() *cli.Command {
 			} else {
 				return errors.New("not uuid")
 			}
-			cluster := new(Chart)
-			return GetItem(cluster, uuid)
+			chart := new(Chart)
+			return GetItem(chart, uuid)
 		},
 	}
 }
@@ -67,7 +82,7 @@ func ChartDeleteCommand() *cli.Command {
 		Name:    "delete",
 		Aliases: []string{"del"},
 		Flags:   []cli.Flag{},
-		Usage:   "Delete a chart",
+		Usage:   "Delete a Chart",
 		Action: func(c *cli.Context) error {
 			var uuid string
 			if c.Args().Len() > 0 {
@@ -76,9 +91,9 @@ func ChartDeleteCommand() *cli.Command {
 				return errors.New("not uuid")
 			}
 
-			cluster := new(Chart)
+			chart := new(Chart)
 			log.Debug().Str("uuid", uuid).Msg("Chart delete uuid")
-			return DeleteItem(cluster, uuid)
+			return DeleteItem(chart, uuid)
 
 		},
 	}
@@ -93,10 +108,10 @@ func ChartCreateCommand() *cli.Command {
 				Name:    "file",
 				Aliases: []string{"f"},
 				Value:   "",
-				Usage:   "Upload a chart with local given file",
+				Usage:   "Upload a Chart with local given file",
 			},
 		},
-		Usage: "Upload a chart from local",
+		Usage: "Upload a Chart from local",
 		Action: func(c *cli.Context) error {
 
 			file := c.String("file")
@@ -109,14 +124,14 @@ func ChartCreateCommand() *cli.Command {
 			bodyBuf := &bytes.Buffer{}
 			bodyWriter := multipart.NewWriter(bodyBuf)
 
-			//关键的一步操作
+			//
 			fileWriter, err := bodyWriter.CreateFormFile("file", filename)
 			if err != nil {
 				fmt.Println("error writing to buffer")
 				return err
 			}
 
-			//打开文件句柄操作
+			// Open file
 			fh, err := os.Open(file)
 			if err != nil {
 				fmt.Println("error opening file")
@@ -124,7 +139,7 @@ func ChartCreateCommand() *cli.Command {
 			}
 			defer fh.Close()
 
-			//iocopy
+			//io.copy
 			_, err = io.Copy(fileWriter, fh)
 			if err != nil {
 				return err
@@ -141,11 +156,16 @@ func ChartCreateCommand() *cli.Command {
 			}
 
 			serviceUrl := viper.GetString("serviceurl")
-			apiVersion := api.ApiVersion + "/"
+			apiVersion := api.APIVersion + "/"
 			if serviceUrl == "" {
 				serviceUrl = "localhost:8080/"
 			}
-			Url := "http://" + serviceUrl + "/" + apiVersion + r.Path
+			safeconnect := viper.GetString("safeconnect")
+			scheme := "http://"
+			if safeconnect == "true" {
+				scheme = "https://"
+			}
+			Url := scheme + serviceUrl + "/" + apiVersion + r.Path
 			body := bytes.NewReader(r.Body)
 			log.Debug().Str("Type", r.Type).Str("url", Url).Msg("Request")
 			request, err := http.NewRequest(r.Type, Url, body)
@@ -172,7 +192,7 @@ func ChartCreateCommand() *cli.Command {
 			}
 
 			log.Debug().Int("Code", resp.StatusCode).Bytes("Body", respBody).Msg("ok")
-			fmt.Println("Upload file success")
+			fmt.Println("Upload file Success")
 			return nil
 		},
 	}
